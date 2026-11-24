@@ -100,6 +100,8 @@ export default function RequestsList() {
   };
 
   const isAdmin = currentUser?.role === "admin";
+  const canCreate =
+    currentUser?.role === "admin" || currentUser?.role === "team_leader";
 
   return (
     <div className="space-y-6">
@@ -140,13 +142,15 @@ export default function RequestsList() {
             <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
           </button>
 
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0058A3] hover:bg-[#003D73] text-white text-sm font-medium rounded-md transition"
-          >
-            <Plus size={18} />
-            New Request
-          </button>
+          {canCreate && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#0058A3] hover:bg-[#003D73] text-white text-sm font-medium rounded-md transition"
+            >
+              <Plus size={18} />
+              New Request
+            </button>
+          )}
         </div>
       </div>
 
@@ -156,7 +160,8 @@ export default function RequestsList() {
           <div className="p-12 text-center text-[#4A5568]">Loading…</div>
         ) : requests.length === 0 ? (
           <div className="p-12 text-center text-[#4A5568]">
-            No requests yet. Create the first one!
+            No requests yet.
+            {canCreate && " Create the first one!"}
           </div>
         ) : (
           <div className="overflow-x-auto">
