@@ -50,21 +50,20 @@ Submitted → Under Review → Ordered → Received → Delivered → Closed
 ### Completed
 - [x] Next.js project setup
 - [x] IKEA-inspired theme + global styles
-- [x] Header with user profile + logout
+- [x] Header with user profile + logout + navigation
 - [x] Supabase connection (env + clients)
 - [x] Database tables (`profiles`, `coworkers`, `requests`)
 - [x] Login page + middleware auth protection
 - [x] Core types & constants
-- [x] Requests list (home page) with filters
+- [x] Requests list (home page) with filters + realtime
 - [x] Create Request form (modal)
 - [x] Admin can change status inline
-- [x] Realtime updates via Supabase
+- [x] Role-based UI (New Request only for team_leader + admin)
+- [x] Coworkers management (CRUD) at `/coworkers`
 
 ### Next
-- [ ] Coworkers management (CRUD)
-- [ ] Better status history / handover date
+- [ ] Handover date support + status history
 - [ ] Basic Reporting (by requester / by coworker)
-- [ ] Role-based UI polish
 - [ ] Mobile responsiveness (optional later)
 
 ---
@@ -74,16 +73,19 @@ Submitted → Under Review → Ordered → Received → Delivered → Closed
 src/
 ├── app/
 │   ├── login/
+│   ├── coworkers/        # Coworkers management
 │   ├── page.tsx          # Requests list (home)
 │   ├── layout.tsx
 │   └── globals.css
 ├── components/
 │   ├── layout/
 │   │   └── Header.tsx
-│   └── requests/
-│       ├── RequestsList.tsx
-│       ├── RequestForm.tsx
-│       └── StatusBadge.tsx
+│   ├── requests/
+│   │   ├── RequestsList.tsx
+│   │   ├── RequestForm.tsx
+│   │   └── StatusBadge.tsx
+│   └── coworkers/
+│       └── CoworkersManager.tsx
 ├── lib/
 │   ├── supabase/
 │   ├── constants.ts
@@ -96,7 +98,7 @@ src/
 ## Database (Supabase)
 
 - `profiles` → users + role (`team_leader` | `admin`)
-- `coworkers` → list of receivers
+- `coworkers` → list of receivers (`name`, `team`, `is_active`)
 - `requests` → main request table
 
 **Expected columns for `requests`:**
@@ -110,6 +112,7 @@ src/
 ## Local Development
 
 ```bash
+git pull origin main
 npm install
 npm run dev
 ```
