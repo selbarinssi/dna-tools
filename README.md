@@ -60,11 +60,14 @@ Submitted → Under Review → Ordered → Received → Delivered → Closed
 - [x] Admin can change status inline
 - [x] Role-based UI (New Request only for team_leader + admin)
 - [x] Coworkers management (CRUD) at `/coworkers`
+- [x] Handover date column + auto-set when status → Delivered
+- [x] Basic Reporting at `/reporting` (by status / requester / coworker)
 
-### Next
-- [ ] Handover date support + status history
-- [ ] Basic Reporting (by requester / by coworker)
-- [ ] Mobile responsiveness (optional later)
+### Next (optional polish)
+- [ ] Manual edit of handover date
+- [ ] Status history log
+- [ ] Mobile responsiveness improvements
+- [ ] Export to Excel
 
 ---
 
@@ -73,7 +76,8 @@ Submitted → Under Review → Ordered → Received → Delivered → Closed
 src/
 ├── app/
 │   ├── login/
-│   ├── coworkers/        # Coworkers management
+│   ├── coworkers/
+│   ├── reporting/
 │   ├── page.tsx          # Requests list (home)
 │   ├── layout.tsx
 │   └── globals.css
@@ -84,8 +88,10 @@ src/
 │   │   ├── RequestsList.tsx
 │   │   ├── RequestForm.tsx
 │   │   └── StatusBadge.tsx
-│   └── coworkers/
-│       └── CoworkersManager.tsx
+│   ├── coworkers/
+│   │   └── CoworkersManager.tsx
+│   └── reporting/
+│       └── ReportingDashboard.tsx
 ├── lib/
 │   ├── supabase/
 │   ├── constants.ts
