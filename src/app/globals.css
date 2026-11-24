@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ikea-blue: #0058A3;
+  --color-ikea-blue-dark: #003D73;
+  --color-ikea-yellow: #FFDA1A;
+  --color-ikea-yellow-dark: #E6C200;
+  --color-background: #F5F7FA;
+  --color-surface: #FFFFFF;
+  --color-border: #E2E8F0;
+  --color-text: #1A202C;
+  --color-text-secondary: #4A5568;
+  --color-success: #38A169;
+  --color-warning: #D69E2E;
+  --color-danger: #E53E3E;
+}
+
+@layer base {
+  html {
+    font-family: "Noto Sans", system-ui, sans-serif;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+  }
+}
