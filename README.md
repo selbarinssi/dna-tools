@@ -18,10 +18,8 @@ Real-time desktop dashboard with clean IKEA-inspired design.
 - Real-time updates (no email/WhatsApp notifications in v1)
 
 ### Status Flow
-Submitted → Under Review → Ordered → Received → Delivered → Closed
+Submitted → Under Review → Ordered → Received → Delivered → Closed  
 ↘ Rejected / Cancelled
-
-Text
 
 ### Main Fields on a Request
 - Request Date
@@ -40,7 +38,7 @@ Text
 
 ## Tech Stack
 
-- **Frontend**: Next.js 15 (App Router) + TypeScript + Tailwind
+- **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind
 - **Auth + Database + Realtime**: Supabase
 - **Hosting**: Vercel (later)
 - **Design**: IKEA-inspired (Blue `#0058A3` + Yellow `#FFDA1A` + Noto Sans)
@@ -52,39 +50,46 @@ Text
 ### Completed
 - [x] Next.js project setup
 - [x] IKEA-inspired theme + global styles
-- [x] Basic Header + Home page
+- [x] Header with user profile + logout
 - [x] Supabase connection (env + clients)
-- [x] Database tables created (`profiles`, `coworkers`, `requests`)
-- [x] Login page
+- [x] Database tables (`profiles`, `coworkers`, `requests`)
+- [x] Login page + middleware auth protection
+- [x] Core types & constants
+- [x] Requests list (home page) with filters
+- [x] Create Request form (modal)
+- [x] Admin can change status inline
+- [x] Realtime updates via Supabase
 
 ### Next
-- [ ] Auth protection (redirect if not logged in)
-- [ ] Create Request form
-- [ ] Requests list (for everyone)
-- [ ] Admin status management
-- [ ] Coworkers management
-- [ ] Basic Reporting
+- [ ] Coworkers management (CRUD)
+- [ ] Better status history / handover date
+- [ ] Basic Reporting (by requester / by coworker)
+- [ ] Role-based UI polish
+- [ ] Mobile responsiveness (optional later)
 
 ---
 
 ## Project Structure
+```
 src/
 ├── app/
-│ ├── login/ # Login page
-│ ├── page.tsx # Home
-│ ├── layout.tsx
-│ └── globals.css
+│   ├── login/
+│   ├── page.tsx          # Requests list (home)
+│   ├── layout.tsx
+│   └── globals.css
 ├── components/
-│ └── layout/
-│ └── Header.tsx
+│   ├── layout/
+│   │   └── Header.tsx
+│   └── requests/
+│       ├── RequestsList.tsx
+│       ├── RequestForm.tsx
+│       └── StatusBadge.tsx
 ├── lib/
-│ ├── supabase/
-│ │ ├── client.ts
-│ │ └── server.ts
-│ └── utils.ts
+│   ├── supabase/
+│   ├── constants.ts
+│   └── utils.ts
 └── types/
-
-Text
+```
 
 ---
 
@@ -94,10 +99,25 @@ Text
 - `coworkers` → list of receivers
 - `requests` → main request table
 
+**Expected columns for `requests`:**
+- id, request_date, requested_by, coworker_id
+- tool_name, reference, description, supplier, quantity
+- note, status, handover_date, unit_price
+- created_at, updated_at
+
 ---
 
 ## Local Development
 
 ```bash
+npm install
 npm run dev
-Open [localhost](http://localhost:3000/)
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+Make sure `.env.local` has:
+```
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
