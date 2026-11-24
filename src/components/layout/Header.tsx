@@ -48,6 +48,7 @@ export default function Header() {
   const navItems = [
     { href: "/", label: "Requests" },
     { href: "/coworkers", label: "Coworkers" },
+    { href: "/reporting", label: "Reporting" },
   ];
 
   return (
@@ -101,13 +102,13 @@ export default function Header() {
       </div>
 
       {/* Mobile nav */}
-      <div className="sm:hidden border-t border-white/10 px-6 py-2 flex gap-2">
+      <div className="sm:hidden border-t border-white/10 px-6 py-2 flex gap-2 overflow-x-auto">
         {navItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
-              "px-3 py-1 rounded text-sm",
+              "px-3 py-1 rounded text-sm whitespace-nowrap",
               pathname === item.href
                 ? "bg-white/20 font-medium"
                 : "opacity-80"
