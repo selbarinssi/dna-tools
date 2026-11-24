@@ -83,9 +83,20 @@ export default function RequestsList() {
   const handleStatusChange = async (id: string, newStatus: RequestStatus) => {
     if (!currentUser || currentUser.role !== "admin") return;
 
+    const current = requests.find((r) => r.id === id);
+    const updates: Record<string, unknown> = {
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Auto-set handover_date when moving to Delivered (if not already set)
+    if (newStatus === "Delivered" && current && !current.handover_date) {
+      updates.handover_date = new Date().toISOString().slice(0, 10);
+    }
+
     const { error } = await supabase
       .from("requests")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq("id", id);
 
     if (error) {
@@ -95,7 +106,16 @@ export default function RequestsList() {
 
     // Optimistic update
     setRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              status: newStatus,
+              handover_date:
+                (updates.handover_date as string) || r.handover_date,
+            }
+          : r
+      )
     );
   };
 
@@ -187,6 +207,9 @@ export default function RequestsList() {
                     Status
                   </th>
                   <th className="text-left px-4 py-3 font-medium text-[#4A5568]">
+                    Handover
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium text-[#4A5568]">
                     Supplier
                   </th>
                 </tr>
@@ -249,6 +272,11 @@ export default function RequestsList() {
                       ) : (
                         <StatusBadge status={req.status} />
                       )}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap text-[#4A5568]">
+                      {req.handover_date
+                        ? format(new Date(req.handover_date), "dd MMM yyyy")
+                        : "—"}
                     </td>
                     <td className="px-4 py-3 text-[#4A5568]">{req.supplier}</td>
                   </tr>
