@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import type { Profile } from "@/types";
 import { LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function Header() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
   const supabase = createClient();
 
   useEffect(() => {
@@ -42,14 +45,35 @@ export default function Header() {
     router.refresh();
   };
 
+  const navItems = [
+    { href: "/", label: "Requests" },
+    { href: "/coworkers", label: "Coworkers" },
+  ];
+
   return (
     <header className="bg-[#0058A3] text-white shadow-sm">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-lg tracking-tight">D&A Tools</span>
-          <span className="hidden sm:inline text-sm opacity-80">
-            Tool Request System
-          </span>
+        <div className="flex items-center gap-6">
+          <Link href="/" className="font-bold text-lg tracking-tight hover:opacity-90">
+            D&A Tools
+          </Link>
+
+          <nav className="hidden sm:flex items-center gap-1">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "px-3 py-1.5 rounded-md text-sm transition",
+                  pathname === item.href
+                    ? "bg-white/20 font-medium"
+                    : "hover:bg-white/10 opacity-90"
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
         </div>
 
         <div className="flex items-center gap-4">
@@ -74,6 +98,24 @@ export default function Header() {
             </>
           )}
         </div>
+      </div>
+
+      {/* Mobile nav */}
+      <div className="sm:hidden border-t border-white/10 px-6 py-2 flex gap-2">
+        {navItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={cn(
+              "px-3 py-1 rounded text-sm",
+              pathname === item.href
+                ? "bg-white/20 font-medium"
+                : "opacity-80"
+            )}
+          >
+            {item.label}
+          </Link>
+        ))}
       </div>
     </header>
   );
