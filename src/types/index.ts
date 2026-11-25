@@ -17,6 +17,7 @@ export interface Profile {
   email: string;
   full_name: string | null;
   role: UserRole;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -38,15 +39,28 @@ export interface Request {
   reference: string | null;
   description: string | null;
   supplier: string;
+  supplier_url: string | null;
   quantity: number;
   note: string | null;
   status: RequestStatus;
+  rejection_reason: string | null;
   handover_date: string | null;
   unit_price: number | null;
   created_at: string;
   updated_at: string;
 
   // Joined fields (optional)
-  requester?: Profile;
-  coworker?: Coworker;
+  requester?: Pick<Profile, "id" | "full_name" | "email" | "role"> | null;
+  coworker?: Pick<Coworker, "id" | "name" | "team"> | null;
+}
+
+export interface StatusHistoryEntry {
+  id: string;
+  request_id: string;
+  from_status: RequestStatus | null;
+  to_status: RequestStatus;
+  reason: string | null;
+  changed_by: string | null;
+  changed_at: string;
+  changer?: Pick<Profile, "full_name" | "email"> | null;
 }
