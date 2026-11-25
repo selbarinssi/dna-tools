@@ -54,7 +54,7 @@ export default function UsersManager() {
 
       <div className="text-sm text-[#4A5568] bg-blue-50 border border-blue-200 rounded-md px-4 py-3">
         <strong>To add a new user:</strong> Supabase Dashboard → Authentication → Users → Add user. A profile is created
-        automatically as <em>Team leader</em>; come back here to promote them to admin if needed.
+        automatically as <em>Team leader</em>; come back here to change their role to <em>Guest</em> or <em>Admin</em> if needed.
       </div>
 
       {error && <div className={errorBox}>{error}</div>}
@@ -95,6 +95,7 @@ export default function UsersManager() {
                         onChange={(e) => update(u.id, { role: e.target.value as UserRole })}
                         className={`${inputClass} !py-1 !w-auto`}
                       >
+                        <option value="guest">Guest</option>
                         <option value="team_leader">Team leader</option>
                         <option value="admin">Admin</option>
                       </select>
