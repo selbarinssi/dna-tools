@@ -224,58 +224,70 @@ export default function RequestsList() {
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-lg border border-[#E2E8F0] p-4 grid grid-cols-1 md:grid-cols-6 gap-3">
-        <div className="relative md:col-span-2">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#718096]" />
-          <input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search tool, référence, note…"
-            className={`${inputClass} pl-9`}
-          />
-        </div>
-        <select value={filters.status} onChange={(e) => updateFilter({ status: e.target.value })} className={inputClass}>
-          <option value="all">All statuses</option>
-          {REQUEST_STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <select value={filters.coworkerId} onChange={(e) => updateFilter({ coworkerId: e.target.value })} className={inputClass}>
-          <option value="all">All coworkers</option>
-          {coworkers.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-        <select value={filters.requesterId} onChange={(e) => updateFilter({ requesterId: e.target.value })} className={inputClass}>
-          <option value="all">All requesters</option>
-          {requesters.map((p) => (
-            <option key={p.id} value={p.id}>{p.full_name || p.email}</option>
-          ))}
-        </select>
-        <div className="flex items-center gap-2">
-          {currentUser && (
-            <button
-              onClick={() => updateFilter({ requesterId: onlyMine ? "all" : currentUser.id })}
-              className={`px-3 py-2 text-sm rounded-md border whitespace-nowrap ${onlyMine ? "bg-[#0058A3] text-white border-[#0058A3]" : "border-[#E2E8F0] text-[#4A5568] hover:bg-gray-50"}`}
-            >
-              My requests
-            </button>
-          )}
-        </div>
-        <div className="md:col-span-3 flex items-center gap-2 text-sm text-[#4A5568]">
-          <span>From</span>
-          <input type="date" value={filters.from} onChange={(e) => updateFilter({ from: e.target.value })} className={inputClass} />
-          <span>to</span>
-          <input type="date" value={filters.to} onChange={(e) => updateFilter({ to: e.target.value })} className={inputClass} />
-        </div>
-        {hasActiveFilters(filters) && (
-          <div className="md:col-span-3 flex items-center md:justify-end">
-            <button onClick={clearFilters} className="inline-flex items-center gap-1 text-sm text-[#0058A3] hover:underline">
-              <X size={14} /> Clear all filters
-            </button>
-          </div>
-        )}
-      </div>
+<div className="bg-white rounded-lg border border-[#E2E8F0] p-4 space-y-3">
+  <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+    <div className="relative md:col-span-2">
+      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#718096]" />
+      <input
+        value={searchInput}
+        onChange={(e) => setSearchInput(e.target.value)}
+        placeholder="Search tool, référence, note…"
+        className={`${inputClass} pl-9`}
+      />
+    </div>
+    <select value={filters.status} onChange={(e) => updateFilter({ status: e.target.value })} className={inputClass}>
+      <option value="all">All statuses</option>
+      {REQUEST_STATUSES.map((s) => (
+        <option key={s} value={s}>{s}</option>
+      ))}
+    </select>
+    <select value={filters.coworkerId} onChange={(e) => updateFilter({ coworkerId: e.target.value })} className={inputClass}>
+      <option value="all">All coworkers</option>
+      {coworkers.map((c) => (
+        <option key={c.id} value={c.id}>{c.name}</option>
+      ))}
+    </select>
+    <select value={filters.requesterId} onChange={(e) => updateFilter({ requesterId: e.target.value })} className={inputClass}>
+      <option value="all">All requesters</option>
+      {requesters.map((p) => (
+        <option key={p.id} value={p.id}>{p.full_name || p.email}</option>
+      ))}
+    </select>
+    <div className="flex items-center gap-2">
+      {currentUser && (
+        <button
+          onClick={() => updateFilter({ requesterId: onlyMine ? "all" : currentUser.id })}
+          className={`px-3 py-2 text-sm rounded-md border whitespace-nowrap ${onlyMine ? "bg-[#0058A3] text-white border-[#0058A3]" : "border-[#E2E8F0] text-[#4A5568] hover:bg-gray-50"}`}
+        >
+          My requests
+        </button>
+      )}
+    </div>
+  </div>
+
+  {/* Compact date range + clear */}
+  <div className="flex flex-wrap items-center gap-2 text-sm text-[#4A5568]">
+    <span className="font-medium">Period</span>
+    <input
+      type="date"
+      value={filters.from}
+      onChange={(e) => updateFilter({ from: e.target.value })}
+      className={`${inputClass} !w-auto !py-1.5`}
+    />
+    <span>→</span>
+    <input
+      type="date"
+      value={filters.to}
+      onChange={(e) => updateFilter({ to: e.target.value })}
+      className={`${inputClass} !w-auto !py-1.5`}
+    />
+    {hasActiveFilters(filters) && (
+      <button onClick={clearFilters} className="inline-flex items-center gap-1 ml-2 text-[#0058A3] hover:underline">
+        <X size={14} /> Clear filters
+      </button>
+    )}
+  </div>
+</div>
 
       {error && <div className={errorBox}>{error}</div>}
 
