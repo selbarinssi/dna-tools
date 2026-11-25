@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Coworker, Profile } from "@/types";
-import { Plus, Pencil, Trash2, X, Check, RefreshCw } from "lucide-react";
+import { Plus, Pencil, X, Check, RefreshCw } from "lucide-react";
 
 export default function CoworkersManager() {
   const supabase = createClient();
@@ -112,25 +112,6 @@ export default function CoworkersManager() {
     loadData();
   };
 
-  const handleDelete = async (id: string) => {
-    if (!isAdmin) return;
-    if (!confirm("Delete this coworker? Existing requests will keep the name but the link may break.")) {
-      return;
-    }
-
-    const { error: deleteError } = await supabase
-      .from("coworkers")
-      .delete()
-      .eq("id", id);
-
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
-    }
-
-    loadData();
-  };
-
   const toggleActive = async (c: Coworker) => {
     if (!isAdmin) return;
 
@@ -226,6 +207,7 @@ export default function CoworkersManager() {
                     </td>
                     <td className="px-4 py-3">
                       <button
+                        title={isAdmin ? "Click to toggle active / inactive" : undefined}
                         onClick={() => toggleActive(c)}
                         disabled={!isAdmin}
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
@@ -246,13 +228,6 @@ export default function CoworkersManager() {
                             title="Edit"
                           >
                             <Pencil size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(c.id)}
-                            className="p-1.5 rounded hover:bg-red-50 text-red-500"
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
                           </button>
                         </div>
                       </td>
@@ -322,7 +297,7 @@ export default function CoworkersManager() {
                   className="rounded border-gray-300 text-[#0058A3] focus:ring-[#0058A3]"
                 />
                 <label htmlFor="is_active" className="text-sm text-[#1A202C]">
-                  Active (appears in request form)
+                  Active (appears in the request form). Deactivate instead of deleting so old requests keep their coworker.
                 </label>
               </div>
 
