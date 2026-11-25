@@ -49,6 +49,7 @@ export default function Header() {
     { href: "/", label: "Requests" },
     { href: "/coworkers", label: "Coworkers" },
     { href: "/reporting", label: "Reporting" },
+    ...(profile?.role === "admin" ? [{ href: "/users", label: "Users" }] : []),
   ];
 
   return (
