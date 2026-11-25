@@ -4,7 +4,6 @@ import type { RequestStatus } from "@/types";
 
 export const REQUEST_STATUSES: RequestStatus[] = [
   "Submitted",
-  "Under Review",
   "Ordered",
   "Received",
   "Delivered",
@@ -16,7 +15,6 @@ export const REQUEST_STATUSES: RequestStatus[] = [
 /** Still being processed (not yet in the coworker's hands). */
 export const OPEN_STATUSES: RequestStatus[] = [
   "Submitted",
-  "Under Review",
   "Ordered",
   "Received",
 ];
@@ -31,16 +29,14 @@ export const TERMINAL_STATUSES: RequestStatus[] = [
 export const NO_SPEND_STATUSES: RequestStatus[] = ["Rejected", "Cancelled"];
 
 /**
- * Allowed status changes. MUST match the CASE block in
- * supabase/migrations/001_v2_security_workflow.sql (guard_request_update).
- * The database enforces it; this copy is only used to show the right buttons.
+ * Allowed status changes.
+ * Must match the database trigger (guard_request_update).
  */
 export const STATUS_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
-  Submitted: ["Under Review", "Rejected", "Cancelled"],
-  "Under Review": ["Submitted", "Ordered", "Rejected", "Cancelled"],
-  Ordered: ["Under Review", "Received", "Cancelled"],
-  Received: ["Ordered", "Delivered"],
-  Delivered: ["Received", "Closed"],
+  Submitted: ["Ordered", "Rejected", "Cancelled"],
+  Ordered: ["Received", "Cancelled"],
+  Received: ["Delivered"],
+  Delivered: ["Closed"],
   Closed: [],
   Rejected: [],
   Cancelled: [],
@@ -55,7 +51,6 @@ export const STATUS_COLORS: Record<
   { bg: string; text: string; border: string }
 > = {
   Submitted: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
-  "Under Review": { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
   Ordered: { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200" },
   Received: { bg: "bg-cyan-50", text: "text-cyan-700", border: "border-cyan-200" },
   Delivered: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
