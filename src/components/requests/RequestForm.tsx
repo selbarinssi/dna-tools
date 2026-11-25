@@ -33,8 +33,16 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
+  // Searchable coworker picker
+  const [coworkerQuery, setCoworkerQuery] = useState("");
+  const [coworkerOpen, setCoworkerOpen] = useState(false);
+
   useEffect(() => {
     if (!open) return;
+    setForm(EMPTY_FORM);
+    setCoworkerQuery("");
+    setCoworkerOpen(false);
+    setError(null);
     (async () => {
       const { data } = await supabase
         .from("coworkers")
@@ -44,6 +52,18 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
       if (data) setCoworkers(data as Coworker[]);
     })();
   }, [open, supabase]);
+
+  const filteredCoworkers = useMemo(() => {
+    const q = coworkerQuery.trim().toLowerCase();
+    if (!q) return coworkers;
+    return coworkers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.team && c.team.toLowerCase().includes(q))
+    );
+  }, [coworkers, coworkerQuery]);
+
+  const selectedCoworker = coworkers.find((c) => c.id === form.coworker_id);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -55,6 +75,11 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
+
+    if (!form.coworker_id) {
+      setError("Please select a coworker from the list.");
+      return;
+    }
 
     const url = form.supplier_url.trim();
     if (url && !/^https?:\/\//i.test(url)) {
@@ -87,6 +112,7 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
     }
 
     setForm(EMPTY_FORM);
+    setCoworkerQuery("");
     onSuccess();
     onClose();
   };
@@ -105,69 +131,173 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
+          {/* ===== SEARCHABLE COWORKER ===== */}
+          <div className="relative">
             <label className={labelClass}>
               Coworker (Receiver) <span className="text-red-500">*</span>
             </label>
-            <select name="coworker_id" required value={form.coworker_id} onChange={handleChange} className={inputClass}>
-              <option value="">Select coworker…</option>
-              {coworkers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                  {c.team ? ` (${c.team})` : ""}
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              value={
+                coworkerOpen
+                  ? coworkerQuery
+                  : selectedCoworker
+                    ? `${selectedCoworker.name}${selectedCoworker.team ? ` (${selectedCoworker.team})` : ""}`
+                    : coworkerQuery
+              }
+              onChange={(e) => {
+                setCoworkerQuery(e.target.value);
+                setCoworkerOpen(true);
+                setForm((prev) => ({ ...prev, coworker_id: "" }));
+              }}
+              onFocus={() => {
+                setCoworkerOpen(true);
+                setCoworkerQuery(selectedCoworker?.name ?? "");
+              }}
+              onBlur={() => {
+                setTimeout(() => setCoworkerOpen(false), 150);
+              }}
+              placeholder="Type to search coworker…"
+              className={inputClass}
+              autoComplete="off"
+            />
+
+            {coworkerOpen && (
+              <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-[#E2E8F0] bg-white shadow-lg">
+                {filteredCoworkers.length === 0 ? (
+                  <li className="px-3 py-2 text-sm text-[#718096]">No match</li>
+                ) : (
+                  filteredCoworkers.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-[#F8FAFC]"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, coworker_id: c.id }));
+                          setCoworkerQuery(c.name);
+                          setCoworkerOpen(false);
+                        }}
+                      >
+                        {c.name}
+                        {c.team ? <span className="text-[#718096]"> ({c.team})</span> : null}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
+
             {coworkers.length === 0 && (
               <p className="text-xs text-amber-600 mt-1">
                 No active coworkers yet. Ask an admin to add some in the Coworkers page.
               </p>
             )}
           </div>
+          {/* ===== END SEARCHABLE COWORKER ===== */}
 
           <div>
             <label className={labelClass}>
               Tool name <span className="text-red-500">*</span>
             </label>
-            <input type="text" name="tool_name" required value={form.tool_name} onChange={handleChange} className={inputClass} placeholder="e.g. Cordless drill" />
+            <input
+              type="text"
+              name="tool_name"
+              required
+              value={form.tool_name}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="e.g. Cordless drill"
+            />
           </div>
 
           <div>
             <label className={labelClass}>Référence</label>
-            <input type="text" name="reference" value={form.reference} onChange={handleChange} className={inputClass} placeholder="SKU / reference" />
+            <input
+              type="text"
+              name="reference"
+              value={form.reference}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="SKU / reference"
+            />
           </div>
 
           <div>
             <label className={labelClass}>Description</label>
-            <textarea name="description" rows={2} value={form.description} onChange={handleChange} className={inputClass} placeholder="Optional details" />
+            <textarea
+              name="description"
+              rows={2}
+              value={form.description}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="Optional details"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelClass}>Supplier</label>
-              <input type="text" name="supplier" value={form.supplier} onChange={handleChange} className={inputClass} />
+              <input
+                type="text"
+                name="supplier"
+                value={form.supplier}
+                onChange={handleChange}
+                className={inputClass}
+              />
             </div>
             <div>
               <label className={labelClass}>
                 Quantity <span className="text-red-500">*</span>
               </label>
-              <input type="number" name="quantity" required min={1} value={form.quantity} onChange={handleChange} className={inputClass} />
+              <input
+                type="number"
+                name="quantity"
+                required
+                min={1}
+                value={form.quantity}
+                onChange={handleChange}
+                className={inputClass}
+              />
             </div>
           </div>
 
           <div>
             <label className={labelClass}>Product link (e.g. bricoma.ma page)</label>
-            <input type="url" name="supplier_url" value={form.supplier_url} onChange={handleChange} className={inputClass} placeholder="https://…" />
+            <input
+              type="url"
+              name="supplier_url"
+              value={form.supplier_url}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="https://…"
+            />
           </div>
 
           <div>
             <label className={labelClass}>Unit price (MAD, optional)</label>
-            <input type="number" name="unit_price" min={0} step="0.01" value={form.unit_price} onChange={handleChange} className={inputClass} placeholder="0.00" />
+            <input
+              type="number"
+              name="unit_price"
+              min={0}
+              step="0.01"
+              value={form.unit_price}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="0.00"
+            />
           </div>
 
           <div>
             <label className={labelClass}>Note</label>
-            <textarea name="note" rows={2} value={form.note} onChange={handleChange} className={inputClass} placeholder="Any additional note…" />
+            <textarea
+              name="note"
+              rows={2}
+              value={form.note}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="Any additional note…"
+            />
           </div>
 
           {error && <div className={errorBox}>{error}</div>}
