@@ -3,13 +3,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Coworker, Profile } from "@/types";
-import { Plus, Pencil, X, Check, RefreshCw } from "lucide-react";
+import { Plus, Pencil, X, Check, RefreshCw, Upload } from "lucide-react";
 
 export default function CoworkersManager() {
   const supabase = createClient();
   const [coworkers, setCoworkers] = useState<Coworker[]>([]);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Form state
@@ -112,6 +113,63 @@ export default function CoworkersManager() {
     loadData();
   };
 
+  const handleImport = async (file: File) => {
+    if (!isAdmin) return;
+    setImporting(true);
+    setError(null);
+
+    try {
+      const text = await file.text();
+      const lines = text
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      if (lines.length < 2) throw new Error("File is empty or missing header");
+
+      // Expect header: ID, Coworker Name, Team (or Name, Team)
+      const header = lines[0].toLowerCase();
+      const hasId = header.includes("id");
+      const rows = lines.slice(1).map((line) => {
+        const parts = line.split(",").map((p) => p.trim().replace(/^"|"$/g, ""));
+        if (hasId) {
+          return {
+            external_id: parts[0] || null,
+            name: parts[1],
+            team: parts[2] || null,
+          };
+        }
+        return {
+          external_id: null,
+          name: parts[0],
+          team: parts[1] || null,
+        };
+      });
+
+      const payload = rows
+        .filter((r) => r.name)
+        .map((r) => ({
+          external_id: r.external_id,
+          name: r.name,
+          team: r.team,
+          is_active: true,
+        }));
+
+      if (payload.length === 0) throw new Error("No valid rows found");
+
+      const { error: upsertError } = await supabase.from("coworkers").upsert(payload, {
+        onConflict: "name",
+        ignoreDuplicates: false,
+      });
+
+      if (upsertError) throw new Error(upsertError.message);
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const toggleActive = async (c: Coworker) => {
     if (!isAdmin) return;
 
@@ -149,13 +207,31 @@ export default function CoworkersManager() {
           </button>
 
           {isAdmin && (
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-[#0058A3] hover:bg-[#003D73] text-white text-sm font-medium rounded-md transition"
-            >
-              <Plus size={18} />
-              Add Coworker
-            </button>
+            <>
+              <label className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-[#E2E8F0] rounded-md cursor-pointer hover:bg-gray-50 text-[#1A202C]">
+                <Upload size={16} />
+                {importing ? "Importing…" : "Import Excel/CSV"}
+                <input
+                  type="file"
+                  accept=".csv,text/csv,.xlsx"
+                  className="hidden"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleImport(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+
+              <button
+                onClick={openCreate}
+                className="flex items-center gap-2 px-4 py-2 bg-[#0058A3] hover:bg-[#003D73] text-white text-sm font-medium rounded-md transition"
+              >
+                <Plus size={18} />
+                Add Coworker
+              </button>
+            </>
           )}
         </div>
       </div>
