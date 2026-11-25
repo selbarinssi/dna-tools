@@ -4,7 +4,6 @@ export type UserRole = "team_leader" | "admin";
 
 export type RequestStatus =
   | "Submitted"
-  | "Under Review"
   | "Ordered"
   | "Received"
   | "Delivered"
