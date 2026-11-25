@@ -17,8 +17,8 @@ interface Props {
   onChanged: () => void;
 }
 
-const fmtDate = (d: string | null) => (d ? format(new Date(d), "dd MMM yyyy") : "—");
-const fmtDateTime = (d: string) => format(new Date(d), "dd MMM yyyy, HH:mm");
+const fmtDate = (d: string | null) => (d ? format(new Date(d), "dd/MM/yyyy") : "—");
+const fmtDateTime = (d: string) => format(new Date(d), "dd/MM/yyyy, HH:mm");
 
 export default function RequestDetail({ requestId, currentUser, onClose, onChanged }: Props) {
   const supabase = useMemo(() => createClient(), []);
