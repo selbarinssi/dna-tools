@@ -31,6 +31,7 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
   const [coworkers, setCoworkers] = useState<Coworker[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoFilledFromCatalog, setAutoFilledFromCatalog] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
   // Searchable coworker picker
@@ -42,6 +43,7 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
     setForm(EMPTY_FORM);
     setCoworkerQuery("");
     setCoworkerOpen(false);
+    setAutoFilledFromCatalog(false);
     setError(null);
     (async () => {
       const { data } = await supabase
@@ -52,6 +54,45 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
       if (data) setCoworkers(data as Coworker[]);
     })();
   }, [open, supabase]);
+
+  // Auto-fill tool details when supplier_url matches an active catalog entry
+  useEffect(() => {
+    const url = form.supplier_url.trim();
+    if (!url || !/^https?:\/\//i.test(url)) {
+      setAutoFilledFromCatalog(false);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("tools")
+        .select("*")
+        .eq("is_active", true)
+        .ilike("supplier_url", url)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (!data) {
+        setAutoFilledFromCatalog(false);
+        return;
+      }
+
+      setForm((prev) => ({
+        ...prev,
+        tool_name: data.name || prev.tool_name,
+        reference: data.reference || prev.reference,
+        description: data.description || prev.description,
+        supplier: data.supplier || prev.supplier,
+        unit_price: data.unit_price != null ? String(data.unit_price) : prev.unit_price,
+      }));
+      setAutoFilledFromCatalog(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.supplier_url, supabase]);
 
   const filteredCoworkers = useMemo(() => {
     const q = coworkerQuery.trim().toLowerCase();
@@ -113,6 +154,7 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
 
     setForm(EMPTY_FORM);
     setCoworkerQuery("");
+    setAutoFilledFromCatalog(false);
     onSuccess();
     onClose();
   };
@@ -160,7 +202,9 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
               placeholder="Type to search coworker…"
               className={inputClass}
               autoComplete="off"
+              required={!form.coworker_id}
             />
+            <input type="hidden" name="coworker_id" value={form.coworker_id} required />
 
             {coworkerOpen && (
               <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-[#E2E8F0] bg-white shadow-lg">
@@ -195,6 +239,23 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
             )}
           </div>
           {/* ===== END SEARCHABLE COWORKER ===== */}
+
+          <div>
+            <label className={labelClass}>Product link (e.g. bricoma.ma page)</label>
+            <input
+              type="url"
+              name="supplier_url"
+              value={form.supplier_url}
+              onChange={handleChange}
+              className={inputClass}
+              placeholder="https://…"
+            />
+            {autoFilledFromCatalog && (
+              <p className="text-xs text-emerald-600 mt-1">
+                Matched catalog item — tool details and price were auto-filled.
+              </p>
+            )}
+          </div>
 
           <div>
             <label className={labelClass}>
@@ -260,18 +321,6 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
                 className={inputClass}
               />
             </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Product link (e.g. bricoma.ma page)</label>
-            <input
-              type="url"
-              name="supplier_url"
-              value={form.supplier_url}
-              onChange={handleChange}
-              className={inputClass}
-              placeholder="https://…"
-            />
           </div>
 
           <div>
