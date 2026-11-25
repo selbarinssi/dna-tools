@@ -25,7 +25,7 @@ import { format } from "date-fns";
 
 type SortCol = "request_date" | "tool_name" | "quantity" | "status" | "handover_date";
 
-const fmt = (d: string | null) => (d ? format(new Date(d), "dd MMM yyyy") : "—");
+const fmt = (d: string | null) => (d ? format(new Date(d), "dd/MM/yyyy") : "—");
 
 function SortHead({
   col,
