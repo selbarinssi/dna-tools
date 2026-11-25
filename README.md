@@ -47,27 +47,43 @@ Submitted → Under Review → Ordered → Received → Delivered → Closed
 
 ## Current Status
 
-### Completed
-- [x] Next.js project setup
-- [x] IKEA-inspired theme + global styles
-- [x] Header with user profile + logout + navigation
-- [x] Supabase connection (env + clients)
-- [x] Database tables (`profiles`, `coworkers`, `requests`)
-- [x] Login page + middleware auth protection
-- [x] Core types & constants
-- [x] Requests list (home page) with filters + realtime
-- [x] Create Request form (modal)
-- [x] Admin can change status inline
-- [x] Role-based UI (New Request only for team_leader + admin)
-- [x] Coworkers management (CRUD) at `/coworkers`
-- [x] Handover date column + auto-set when status → Delivered
-- [x] Basic Reporting at `/reporting` (by status / requester / coworker)
+### Completed (v1)
+- [x] Next.js + Supabase setup, IKEA theme, login, role-based UI
+- [x] Requests list + create form, coworkers CRUD, basic reporting
 
-### Next (optional polish)
-- [ ] Manual edit of handover date
-- [ ] Status history log
-- [ ] Mobile responsiveness improvements
-- [ ] Export to Excel
+### Completed (v2)
+- [x] **Database security**: Row Level Security on every table (`supabase/migrations/001_v2_security_workflow.sql`)
+- [x] **Enforced workflow**: allowed status changes are checked by the database, not just the UI
+- [x] **Status history** (who / when / why) shown in a detail panel
+- [x] Team leaders can edit or cancel their own request while it is still *Submitted*
+- [x] Rejection requires a reason
+- [x] Admin can edit handover date (Delivered / Closed requests)
+- [x] Requests list: search, filters (status, coworker, requester, dates, "My requests"), sorting, pagination, CSV export
+- [x] Product link field (e.g. the bricoma.ma page)
+- [x] Reporting: date range, spend (MAD), average time to deliver, by month / requester / coworker, CSV export
+- [x] Coworkers are deactivated, never hard-deleted
+- [x] Admin **Users** page (roles, activate / deactivate); profiles are auto-created for new auth users
+- [x] `middleware.ts` renamed to `proxy.ts` (Next.js 16)
+
+### Ideas for later
+- [ ] Password reset page
+- [ ] Mobile layout polish
+- [ ] Email / WhatsApp notifications
+- [ ] Per-coworker budget limits
+
+---
+
+## Setup
+
+1. Copy `.env.example` to `.env.local` and fill in your Supabase URL + anon key.
+2. In Supabase: **SQL Editor -> New query**, paste `supabase/migrations/001_v2_security_workflow.sql`, **Run**.
+   (It replaces all existing RLS policies on the 4 tables. Safe to re-run.)
+3. Add users in **Authentication -> Users -> Add user**. They appear as *Team leader*; promote admins on the **Users** page.
+4. `npm install` then `npm run dev`.
+
+> The status rules exist in two places that must stay identical:
+> `STATUS_TRANSITIONS` in `src/lib/constants.ts` (buttons) and the `CASE` block in the SQL function
+> `guard_request_update` (enforcement).
 
 ---
 
@@ -78,6 +94,7 @@ src/
 │   ├── login/
 │   ├── coworkers/
 │   ├── reporting/
+│   ├── users/            # Admin: roles + access
 │   ├── page.tsx          # Requests list (home)
 │   ├── layout.tsx
 │   └── globals.css
@@ -87,6 +104,7 @@ src/
 │   ├── requests/
 │   │   ├── RequestsList.tsx
 │   │   ├── RequestForm.tsx
+│   │   ├── RequestDetail.tsx   # side panel: details, edit, actions, history
 │   │   └── StatusBadge.tsx
 │   ├── coworkers/
 │   │   └── CoworkersManager.tsx
@@ -94,23 +112,28 @@ src/
 │       └── ReportingDashboard.tsx
 ├── lib/
 │   ├── supabase/
-│   ├── constants.ts
+│   ├── constants.ts      # statuses + allowed transitions
+│   ├── requests.ts       # query / filter helpers
+│   ├── csv.ts            # Excel-friendly export
 │   └── utils.ts
+├── proxy.ts              # auth protection (was middleware.ts)
 └── types/
+supabase/migrations/      # SQL to run in Supabase
 ```
 
 ---
 
 ## Database (Supabase)
 
-- `profiles` → users + role (`team_leader` | `admin`)
+- `profiles` → users + role (`team_leader` | `admin`) + `is_active`
 - `coworkers` → list of receivers (`name`, `team`, `is_active`)
 - `requests` → main request table
+- `request_status_history` → audit log (filled automatically by a trigger)
 
 **Expected columns for `requests`:**
 - id, request_date, requested_by, coworker_id
 - tool_name, reference, description, supplier, quantity
-- note, status, handover_date, unit_price
+- note, status, handover_date, unit_price, supplier_url, rejection_reason
 - created_at, updated_at
 
 ---
