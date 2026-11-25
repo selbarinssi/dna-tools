@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Coworker, Profile } from "@/types";
-import { Plus, Pencil, X, Check, RefreshCw, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Check, RefreshCw, Upload } from "lucide-react";
 
 export default function CoworkersManager() {
   const supabase = createClient();
@@ -170,6 +170,29 @@ export default function CoworkersManager() {
     }
   };
 
+  const handleDelete = async (c: Coworker) => {
+    if (!isAdmin) return;
+    const confirmed = window.confirm(`Delete coworker "${c.name}"?`);
+    if (!confirmed) return;
+
+    setError(null);
+    const { error: deleteError } = await supabase
+      .from("coworkers")
+      .delete()
+      .eq("id", c.id);
+
+    if (deleteError) {
+      setError(
+        deleteError.message.includes("foreign key")
+          ? `Cannot delete "${c.name}" because existing requests reference this coworker. Set them to Inactive instead.`
+          : deleteError.message
+      );
+      return;
+    }
+
+    await loadData();
+  };
+
   const toggleActive = async (c: Coworker) => {
     if (!isAdmin) return;
 
@@ -297,13 +320,20 @@ export default function CoworkersManager() {
                     </td>
                     {isAdmin && (
                       <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => openEdit(c)}
                             className="p-1.5 rounded hover:bg-gray-100 text-[#4A5568]"
                             title="Edit"
                           >
                             <Pencil size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(c)}
+                            className="p-1.5 rounded hover:bg-red-50 text-red-600"
+                            title="Delete"
+                          >
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </td>
