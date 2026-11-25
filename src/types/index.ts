@@ -34,6 +34,7 @@ export interface Tool {
   id: string;
   name: string;
   reference: string | null;
+  category: string | null;
   description: string | null;
   supplier: string;
   supplier_url: string | null;
