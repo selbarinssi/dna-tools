@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -10,19 +10,20 @@ import { cn } from "@/lib/utils";
 
 export default function Header() {
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadProfile = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
       if (!user) {
-        setLoading(false);
+        if (!cancelled) setProfile(null);
         return;
       }
 
@@ -32,11 +33,13 @@ export default function Header() {
         .eq("id", user.id)
         .single();
 
-      if (data) setProfile(data as Profile);
-      setLoading(false);
+      if (!cancelled && data) setProfile(data as Profile);
     };
 
     loadProfile();
+    return () => {
+      cancelled = true;
+    };
   }, [supabase]);
 
   const handleLogout = async () => {
@@ -45,18 +48,22 @@ export default function Header() {
     router.refresh();
   };
 
+  // Stable list: base always shown; admin extras only when we know role
+  const isAdmin = profile?.role === "admin";
+
   const navItems = [
     { href: "/", label: "Requests" },
     { href: "/coworkers", label: "Coworkers" },
-    ...(profile?.role === "admin" ? [{ href: "/tools", label: "Tools" }] : []),
+    ...(isAdmin ? [{ href: "/tools", label: "Tools" }] : []),
     { href: "/reporting", label: "Reporting" },
-    ...(profile?.role === "admin" ? [{ href: "/users", label: "Users" }] : []),
+    ...(isAdmin ? [{ href: "/users", label: "Users" }] : []),
   ];
+
   return (
     <header className="bg-[#0058A3] text-white shadow-sm">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <Link href="/" className="font-bold text-lg tracking-tight hover:opacity-90">
+        <div className="flex items-center gap-6 min-w-0">
+          <Link href="/" className="font-bold text-lg tracking-tight hover:opacity-90 shrink-0">
             D&A Tools
           </Link>
 
@@ -78,8 +85,8 @@ export default function Header() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-4">
-          {!loading && profile && (
+        <div className="flex items-center gap-4 shrink-0">
+          {profile && (
             <>
               <div className="text-right hidden sm:block">
                 <div className="text-sm font-medium leading-tight">
@@ -102,7 +109,6 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Mobile nav */}
       <div className="sm:hidden border-t border-white/10 px-6 py-2 flex gap-2 overflow-x-auto">
         {navItems.map((item) => (
           <Link
@@ -110,9 +116,7 @@ export default function Header() {
             href={item.href}
             className={cn(
               "px-3 py-1 rounded text-sm whitespace-nowrap",
-              pathname === item.href
-                ? "bg-white/20 font-medium"
-                : "opacity-80"
+              pathname === item.href ? "bg-white/20 font-medium" : "opacity-80"
             )}
           >
             {item.label}
