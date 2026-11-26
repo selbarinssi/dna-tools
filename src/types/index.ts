@@ -23,25 +23,25 @@ export interface Profile {
 
 export interface Coworker {
   id: string;
-  external_id?: string | null;
-  name: string;
-  team: string | null;
+  external_id: string | null;
+  name: string;          // Agent Name
+  job_type: string | null;
+  tl: string | null;     // Team Leader
   is_active: boolean;
   created_at: string;
+  // team?: string | null;  // optional if you still keep the column
 }
 
 export interface Tool {
   id: string;
   name: string;
-  reference: string | null;
-  category: string | null;
   description: string | null;
+  category: string | null;
   supplier: string;
-  supplier_url: string | null;
   unit_price: number | null;
+  reference: string | null;
   is_active: boolean;
   created_at: string;
-  updated_at: string;
 }
 
 export interface Request {
