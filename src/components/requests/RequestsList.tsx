@@ -173,9 +173,9 @@ export default function RequestsList() {
           .range(from, to) as unknown as PromiseLike<{ data: Request[] | null; error: { message: string } | null }>;
       });
       downloadCsv(`tool-requests-${format(new Date(), "yyyy-MM-dd")}.csv`, [
-        ["Request date", "Tool", "Référence", "Description", "Coworker", "Team", "Requested by", "Supplier", "Product link", "Qty", "Unit price", "Total", "Status", "Rejection reason", "Handover date", "Note"],
+        ["Request date", "Tool", "Référence", "Description", "Coworker", "Job Type", "TL", "Requested by", "Supplier", "Product link", "Qty", "Unit price", "Total", "Status", "Rejection reason", "Handover date", "Note"],
         ...rows.map((r) => [
-          r.request_date, r.tool_name, r.reference, r.description, r.coworker?.name, r.coworker?.team,
+          r.request_date, r.tool_name, r.reference, r.description, r.coworker?.name, r.coworker?.job_type, r.coworker?.tl,
           requesterName(r), r.supplier, r.supplier_url, r.quantity, r.unit_price, lineTotal(r),
           r.status, r.rejection_reason, r.handover_date, r.note,
         ]),
@@ -327,7 +327,11 @@ export default function RequestsList() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="text-[#1A202C]">{req.coworker?.name ?? "—"}</div>
-                        {req.coworker?.team && <div className="text-xs text-[#718096]">{req.coworker.team}</div>}
+                        {(req.coworker?.job_type || req.coworker?.tl) && (
+                          <div className="text-xs text-[#718096]">
+                            {[req.coworker.job_type, req.coworker.tl].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-[#4A5568]">{requesterName(req)}</td>
                       <td className="px-4 py-3 text-center">{req.quantity}</td>
