@@ -59,6 +59,7 @@ export default function Header() {
     ...(isAdmin ? [{ href: "/users", label: "Users" }] : []),
   ];
 
+  if (pathname === "/login") return null;
   return (
     <header className="bg-[#0058A3] text-white shadow-sm">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
