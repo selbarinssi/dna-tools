@@ -28,11 +28,8 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
 
-  // Searchable coworker picker
   const [coworkerQuery, setCoworkerQuery] = useState("");
   const [coworkerOpen, setCoworkerOpen] = useState(false);
-
-  // Searchable tool picker
   const [toolQuery, setToolQuery] = useState("");
   const [toolOpen, setToolOpen] = useState(false);
 
@@ -104,6 +101,7 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
     setLoading(true);
     setError(null);
 
+    // product_url from tools → supplier_url on the request (this is what the detail panel reads)
     const { error: insertError } = await supabase.from("requests").insert({
       request_date: new Date().toISOString().slice(0, 10),
       requested_by: currentUser.id,
@@ -111,8 +109,9 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
       tool_id: tool.id,
       tool_name: tool.name,
       reference: tool.reference,
-      description: tool.description,
+      description: null,
       supplier: tool.supplier || "Bricoma",
+      supplier_url: tool.product_url || null,
       quantity: Number(form.quantity) || 1,
       note: form.note.trim() || null,
       unit_price: tool.unit_price,
@@ -146,7 +145,7 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* ===== COWORKER ===== */}
+          {/* Coworker */}
           <div className="relative">
             <label className={labelClass}>
               Coworker (Receiver) <span className="text-red-500">*</span>
@@ -169,16 +168,12 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
                 setCoworkerOpen(true);
                 setCoworkerQuery(selectedCoworker?.name ?? "");
               }}
-              onBlur={() => {
-                setTimeout(() => setCoworkerOpen(false), 150);
-              }}
+              onBlur={() => setTimeout(() => setCoworkerOpen(false), 150)}
               placeholder="Type to search coworker…"
               className={inputClass}
               autoComplete="off"
               required={!form.coworker_id}
             />
-            <input type="hidden" name="coworker_id" value={form.coworker_id} required />
-
             {coworkerOpen && (
               <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-[#E2E8F0] bg-white shadow-lg">
                 {filteredCoworkers.length === 0 ? (
@@ -197,27 +192,16 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
                         }}
                       >
                         {c.name}
-                        {c.job_type ? (
-                          <span className="text-[#718096]"> ({c.job_type})</span>
-                        ) : null}
-                        {c.tl ? (
-                          <span className="text-[#718096]"> · TL: {c.tl}</span>
-                        ) : null}
+                        {c.job_type ? <span className="text-[#718096]"> ({c.job_type})</span> : null}
                       </button>
                     </li>
                   ))
                 )}
               </ul>
             )}
-
-            {coworkers.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">
-                No active coworkers yet. Ask an admin to add some in the Coworkers page.
-              </p>
-            )}
           </div>
 
-          {/* ===== TOOL ===== */}
+          {/* Tool */}
           <div className="relative">
             <label className={labelClass}>
               Tool Name <span className="text-red-500">*</span>
@@ -240,16 +224,12 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
                 setToolOpen(true);
                 setToolQuery(selectedTool?.name ?? "");
               }}
-              onBlur={() => {
-                setTimeout(() => setToolOpen(false), 150);
-              }}
+              onBlur={() => setTimeout(() => setToolOpen(false), 150)}
               placeholder="Type to search tool from catalog…"
               className={inputClass}
               autoComplete="off"
               required={!form.tool_id}
             />
-            <input type="hidden" name="tool_id" value={form.tool_id} required />
-
             {toolOpen && (
               <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-[#E2E8F0] bg-white shadow-lg">
                 {filteredTools.length === 0 ? (
@@ -267,11 +247,9 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
                           setToolOpen(false);
                         }}
                       >
-                        <div className="font-medium text-[#1A202C]">{t.name}</div>
+                        <div className="font-medium">{t.name}</div>
                         <div className="text-xs text-[#718096]">
-                          {[t.category, t.supplier, t.reference, t.unit_price != null ? `${t.unit_price} MAD` : null]
-                            .filter(Boolean)
-                            .join(" · ")}
+                          {[t.category, t.supplier, t.reference].filter(Boolean).join(" · ")}
                         </div>
                       </button>
                     </li>
@@ -280,29 +258,37 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
               </ul>
             )}
 
-            {tools.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">
-                No tools in the catalog yet. Ask an admin to add tools in the Tools page.
-              </p>
-            )}
-
+            {/* Show link so requester can verify the item */}
             {selectedTool && (
-              <p className="text-xs text-emerald-700 mt-1">
-                {selectedTool.supplier}
-                {selectedTool.unit_price != null ? ` · ${selectedTool.unit_price} MAD` : ""}
-                {selectedTool.reference ? ` · Ref: ${selectedTool.reference}` : ""}
-              </p>
+              <div className="mt-2 flex items-center gap-2 text-sm text-[#4A5568]">
+                <span>
+                  {selectedTool.supplier}
+                  {selectedTool.unit_price != null ? ` · ${selectedTool.unit_price} MAD` : ""}
+                  {selectedTool.reference ? ` · Ref: ${selectedTool.reference}` : ""}
+                </span>
+                {selectedTool.product_url ? (
+                  <a
+                    href={selectedTool.product_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-lg hover:opacity-80"
+                    title="Open product page"
+                  >
+                    🔗
+                  </a>
+                ) : (
+                  <span className="text-xs text-amber-600">No product link on this tool</span>
+                )}
+              </div>
             )}
           </div>
 
-          {/* ===== QUANTITY ===== */}
           <div>
             <label className={labelClass}>
               Quantity <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
-              name="quantity"
               required
               min={1}
               value={form.quantity}
@@ -313,11 +299,9 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
             />
           </div>
 
-          {/* ===== NOTE ===== */}
           <div>
             <label className={labelClass}>Note</label>
             <textarea
-              name="note"
               rows={2}
               value={form.note}
               onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))}
