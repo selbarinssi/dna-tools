@@ -26,6 +26,7 @@ export default function ToolsManager() {
     is_active: true,
   });
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -63,6 +64,16 @@ export default function ToolsManager() {
   }, [loadData]);
 
   const isAdmin = currentUser?.role === "admin";
+    const filtered = tools.filter((t) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      t.name.toLowerCase().includes(q) ||
+      (t.reference && t.reference.toLowerCase().includes(q)) ||
+      (t.category && t.category.toLowerCase().includes(q)) ||
+      (t.supplier && t.supplier.toLowerCase().includes(q))
+    );
+  });
 
   const openCreate = () => {
     setEditingId(null);
@@ -260,15 +271,23 @@ export default function ToolsManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#1A202C]">Tools</h1>
           <p className="text-sm text-[#4A5568] mt-0.5">
-            {tools.length} tool{tools.length !== 1 ? "s" : ""}
+            {filtered.length} tool{filtered.length !== 1 ? "s" : ""}
+            {search.trim() ? " (filtered)" : ""}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search tools…"
+            className="px-3 py-2 text-sm border border-[#E2E8F0] rounded-md w-full sm:w-64"
+          />
           <button
             onClick={() => loadData()}
             className="p-2 rounded-md border border-[#E2E8F0] hover:bg-gray-50 text-[#4A5568]"
@@ -316,10 +335,12 @@ export default function ToolsManager() {
       <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm overflow-hidden">
         {loading && tools.length === 0 ? (
           <div className="p-12 text-center text-[#4A5568]">Loading…</div>
-        ) : tools.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-[#4A5568]">
-            No tools yet.
-            {isAdmin && " Click Add Tool or Import Excel."}
+            {search.trim()
+              ? "No tools match your search."
+              : "No tools yet."}
+            {!search.trim() && isAdmin && " Click Add Tool or Import Excel."}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -339,7 +360,7 @@ export default function ToolsManager() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0]">
-                {tools.map((t) => (
+                {filtered.map((t) => (
                   <tr key={t.id} className="hover:bg-[#F8FAFC]">
                     <td className="px-4 py-3 font-medium text-[#1A202C]">{t.name}</td>
                     <td className="px-4 py-3">
