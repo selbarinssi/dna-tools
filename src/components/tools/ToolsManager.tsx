@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Tool, Profile } from "@/types";
 import { Plus, Pencil, Trash2, X, RefreshCw, Upload } from "lucide-react";
+import { readSpreadsheet, col } from "@/lib/excel";
 
 export default function ToolsManager() {
   const supabase = createClient();
@@ -134,41 +135,85 @@ export default function ToolsManager() {
     loadData();
   };
 
+    // Excel/CSV: Tool Name | Description | Category | Supplier | Price | Reference
+  // Behavior: MERGE
+  //   - If Reference is filled and already exists → update that tool
+  //   - Else if same Tool Name already exists → update the first match
+  //   - Else → insert new tool
+  //   - Tools not in the file are left untouched
   const handleImport = async (file: File) => {
     if (!isAdmin) return;
     setImporting(true);
     setError(null);
 
     try {
-      const text = await file.text();
-      const lines = text
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean);
+      const rows = await readSpreadsheet(file);
 
-      if (lines.length < 2) throw new Error("File is empty or missing header");
-
-      // Expected header: Tool Name, Description, Category, Supplier, Price, Reference
-      const rows = lines.slice(1).map((line) => {
-        const parts = line.split(",").map((p) => p.trim().replace(/^"|"$/g, ""));
-        return {
-          name: parts[0],
-          description: parts[1] || null,
-          category: parts[2] || null,
-          supplier: parts[3] || "Bricoma",
-          unit_price: parts[4] ? Number(parts[4]) : null,
-          reference: parts[5] || null,
+      const mapped = rows
+        .map((row) => ({
+          name: col(row, "Tool Name", "Name", "name"),
+          description: col(row, "Description", "description") || null,
+          category: col(row, "Category", "category") || null,
+          supplier: col(row, "Supplier", "supplier") || "Bricoma",
+          unit_price: (() => {
+            const p = col(row, "Price", "Unit Price", "unit_price");
+            if (!p) return null;
+            const n = Number(String(p).replace(",", "."));
+            return Number.isFinite(n) ? n : null;
+          })(),
+          reference: col(row, "Reference", "Référence", "Ref", "reference") || null,
           is_active: true,
-        };
-      });
+        }))
+        .filter((r) => r.name);
 
-      const payload = rows.filter((r) => r.name);
+      if (mapped.length === 0) {
+        throw new Error(
+          "No valid rows found. Expected columns: Tool Name, Description, Category, Supplier, Price, Reference"
+        );
+      }
 
-      if (payload.length === 0) throw new Error("No valid rows found");
+      // Load existing tools once to decide update vs insert
+      const { data: existing, error: loadErr } = await supabase
+        .from("tools")
+        .select("id, name, reference");
+      if (loadErr) throw new Error(loadErr.message);
 
-      const { error: insertError } = await supabase.from("tools").insert(payload);
+      const byRef = new Map<string, string>();
+      const byName = new Map<string, string>();
+      for (const t of existing ?? []) {
+        if (t.reference) byRef.set(String(t.reference).toLowerCase(), t.id);
+        byName.set(String(t.name).toLowerCase(), t.id);
+      }
 
-      if (insertError) throw new Error(insertError.message);
+      const toInsert: typeof mapped = [];
+      const toUpdate: { id: string; payload: (typeof mapped)[0] }[] = [];
+
+      for (const row of mapped) {
+        const refKey = row.reference ? row.reference.toLowerCase() : "";
+        const nameKey = row.name.toLowerCase();
+        const existingId =
+          (refKey && byRef.get(refKey)) || byName.get(nameKey) || null;
+
+        if (existingId) {
+          toUpdate.push({ id: existingId, payload: row });
+        } else {
+          toInsert.push(row);
+        }
+      }
+
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from("tools").insert(toInsert);
+        if (insErr) throw new Error(insErr.message);
+      }
+
+      for (const u of toUpdate) {
+        const { error: upErr } = await supabase
+          .from("tools")
+          .update(u.payload)
+          .eq("id", u.id);
+        if (upErr) throw new Error(upErr.message);
+      }
+
       await loadData();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed");
@@ -240,10 +285,10 @@ export default function ToolsManager() {
             <>
               <label className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-[#E2E8F0] rounded-md cursor-pointer hover:bg-gray-50 text-[#1A202C]">
                 <Upload size={16} />
-                {importing ? "Importing…" : "Import CSV"}
+                {importing ? "Importing…" : "Import Excel"}
                 <input
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                   className="hidden"
                   disabled={importing}
                   onChange={(e) => {
