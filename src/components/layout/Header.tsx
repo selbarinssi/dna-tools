@@ -69,8 +69,7 @@ export default function Header() {
     router.refresh();
   };
 
-  // Stable list: base always shown; admin extras only when we know role
-  const isAdmin = profile?.role === "admin";
+
 
   const navItems = [
     { href: "/", label: "Requests" },
