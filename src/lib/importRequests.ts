@@ -96,9 +96,19 @@ export async function importRequestsFromFile(
     if (c.name) coworkerByName.set(norm(c.name), c.id);
   }
 
-  const toolByRef = new Map<string, (typeof tools)[0]>();
-  const toolByName = new Map<string, (typeof tools)[0]>();
-  for (const t of tools ?? []) {
+    type ToolRow = {
+    id: string;
+    name: string;
+    reference: string | null;
+    supplier: string | null;
+    product_url: string | null;
+    unit_price: number | null;
+  };
+
+  const toolList = (tools ?? []) as ToolRow[];
+  const toolByRef = new Map<string, ToolRow>();
+  const toolByName = new Map<string, ToolRow>();
+  for (const t of toolList) {
     if (t.reference) toolByRef.set(norm(String(t.reference)), t);
     if (t.name) toolByName.set(norm(t.name), t);
   }
