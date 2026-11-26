@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Coworker, Profile } from "@/types";
-import { DEFAULT_SUPPLIER } from "@/lib/constants";
+import type { Coworker, Profile, Tool } from "@/types";
 import { inputClass, labelClass, btnPrimary, btnGhost, errorBox } from "@/components/ui/styles";
 import { X } from "lucide-react";
 
@@ -16,83 +15,45 @@ interface RequestFormProps {
 
 const EMPTY_FORM = {
   coworker_id: "",
-  tool_name: "",
-  reference: "",
-  description: "",
-  supplier: DEFAULT_SUPPLIER,
-  supplier_url: "",
+  tool_id: "",
   quantity: 1,
   note: "",
-  unit_price: "",
 };
 
 export default function RequestForm({ open, onClose, onSuccess, currentUser }: RequestFormProps) {
   const supabase = useMemo(() => createClient(), []);
   const [coworkers, setCoworkers] = useState<Coworker[]>([]);
+  const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autoFilledFromCatalog, setAutoFilledFromCatalog] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
   // Searchable coworker picker
   const [coworkerQuery, setCoworkerQuery] = useState("");
   const [coworkerOpen, setCoworkerOpen] = useState(false);
 
+  // Searchable tool picker
+  const [toolQuery, setToolQuery] = useState("");
+  const [toolOpen, setToolOpen] = useState(false);
+
   useEffect(() => {
     if (!open) return;
     setForm(EMPTY_FORM);
     setCoworkerQuery("");
     setCoworkerOpen(false);
-    setAutoFilledFromCatalog(false);
+    setToolQuery("");
+    setToolOpen(false);
     setError(null);
+
     (async () => {
-      const { data } = await supabase
-        .from("coworkers")
-        .select("*")
-        .eq("is_active", true)
-        .order("name");
-      if (data) setCoworkers(data as Coworker[]);
+      const [{ data: cw }, { data: tl }] = await Promise.all([
+        supabase.from("coworkers").select("*").eq("is_active", true).order("name"),
+        supabase.from("tools").select("*").eq("is_active", true).order("name"),
+      ]);
+      if (cw) setCoworkers(cw as Coworker[]);
+      if (tl) setTools(tl as Tool[]);
     })();
   }, [open, supabase]);
-
-  // Auto-fill tool details when supplier_url matches an active catalog entry
-  useEffect(() => {
-    const url = form.supplier_url.trim();
-    if (!url || !/^https?:\/\//i.test(url)) {
-      setAutoFilledFromCatalog(false);
-      return;
-    }
-
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("tools")
-        .select("*")
-        .eq("is_active", true)
-        .ilike("supplier_url", url)
-        .maybeSingle();
-
-      if (cancelled) return;
-      if (!data) {
-        setAutoFilledFromCatalog(false);
-        return;
-      }
-
-      setForm((prev) => ({
-        ...prev,
-        tool_name: data.name || prev.tool_name,
-        reference: data.reference || prev.reference,
-        description: data.description || prev.description,
-        supplier: data.supplier || prev.supplier,
-        unit_price: data.unit_price != null ? String(data.unit_price) : prev.unit_price,
-      }));
-      setAutoFilledFromCatalog(true);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [form.supplier_url, supabase]);
 
   const filteredCoworkers = useMemo(() => {
     const q = coworkerQuery.trim().toLowerCase();
@@ -100,18 +61,26 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
     return coworkers.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
-        (c.team && c.team.toLowerCase().includes(q))
+        (c.job_type && c.job_type.toLowerCase().includes(q)) ||
+        (c.tl && c.tl.toLowerCase().includes(q)) ||
+        (c.external_id && c.external_id.toLowerCase().includes(q))
     );
   }, [coworkers, coworkerQuery]);
 
-  const selectedCoworker = coworkers.find((c) => c.id === form.coworker_id);
+  const filteredTools = useMemo(() => {
+    const q = toolQuery.trim().toLowerCase();
+    if (!q) return tools;
+    return tools.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        (t.reference && t.reference.toLowerCase().includes(q)) ||
+        (t.category && t.category.toLowerCase().includes(q)) ||
+        (t.supplier && t.supplier.toLowerCase().includes(q))
+    );
+  }, [tools, toolQuery]);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
+  const selectedCoworker = coworkers.find((c) => c.id === form.coworker_id);
+  const selectedTool = tools.find((t) => t.id === form.tool_id);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,10 +90,14 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
       setError("Please select a coworker from the list.");
       return;
     }
+    if (!form.tool_id) {
+      setError("Please select a tool from the catalog.");
+      return;
+    }
 
-    const url = form.supplier_url.trim();
-    if (url && !/^https?:\/\//i.test(url)) {
-      setError("Product link must start with http:// or https://");
+    const tool = tools.find((t) => t.id === form.tool_id);
+    if (!tool) {
+      setError("Selected tool not found. Please pick again.");
       return;
     }
 
@@ -135,14 +108,14 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
       request_date: new Date().toISOString().slice(0, 10),
       requested_by: currentUser.id,
       coworker_id: form.coworker_id,
-      tool_name: form.tool_name.trim(),
-      reference: form.reference.trim() || null,
-      description: form.description.trim() || null,
-      supplier: form.supplier.trim() || DEFAULT_SUPPLIER,
-      supplier_url: url || null,
+      tool_id: tool.id,
+      tool_name: tool.name,
+      reference: tool.reference,
+      description: tool.description,
+      supplier: tool.supplier || "Bricoma",
       quantity: Number(form.quantity) || 1,
       note: form.note.trim() || null,
-      unit_price: form.unit_price ? Number(form.unit_price) : null,
+      unit_price: tool.unit_price,
       status: "Submitted",
     });
 
@@ -154,7 +127,7 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
 
     setForm(EMPTY_FORM);
     setCoworkerQuery("");
-    setAutoFilledFromCatalog(false);
+    setToolQuery("");
     onSuccess();
     onClose();
   };
@@ -173,7 +146,7 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* ===== SEARCHABLE COWORKER ===== */}
+          {/* ===== COWORKER ===== */}
           <div className="relative">
             <label className={labelClass}>
               Coworker (Receiver) <span className="text-red-500">*</span>
@@ -184,7 +157,7 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
                 coworkerOpen
                   ? coworkerQuery
                   : selectedCoworker
-                    ? `${selectedCoworker.name}${selectedCoworker.team ? ` (${selectedCoworker.team})` : ""}`
+                    ? `${selectedCoworker.name}${selectedCoworker.job_type ? ` (${selectedCoworker.job_type})` : ""}`
                     : coworkerQuery
               }
               onChange={(e) => {
@@ -224,7 +197,12 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
                         }}
                       >
                         {c.name}
-                        {c.team ? <span className="text-[#718096]"> ({c.team})</span> : null}
+                        {c.job_type ? (
+                          <span className="text-[#718096]"> ({c.job_type})</span>
+                        ) : null}
+                        {c.tl ? (
+                          <span className="text-[#718096]"> · TL: {c.tl}</span>
+                        ) : null}
                       </button>
                     </li>
                   ))
@@ -238,112 +216,111 @@ export default function RequestForm({ open, onClose, onSuccess, currentUser }: R
               </p>
             )}
           </div>
-          {/* ===== END SEARCHABLE COWORKER ===== */}
 
-          <div>
-            <label className={labelClass}>Product link (e.g. bricoma.ma page)</label>
+          {/* ===== TOOL ===== */}
+          <div className="relative">
+            <label className={labelClass}>
+              Tool Name <span className="text-red-500">*</span>
+            </label>
             <input
-              type="url"
-              name="supplier_url"
-              value={form.supplier_url}
-              onChange={handleChange}
+              type="text"
+              value={
+                toolOpen
+                  ? toolQuery
+                  : selectedTool
+                    ? `${selectedTool.name}${selectedTool.reference ? ` [${selectedTool.reference}]` : ""}`
+                    : toolQuery
+              }
+              onChange={(e) => {
+                setToolQuery(e.target.value);
+                setToolOpen(true);
+                setForm((prev) => ({ ...prev, tool_id: "" }));
+              }}
+              onFocus={() => {
+                setToolOpen(true);
+                setToolQuery(selectedTool?.name ?? "");
+              }}
+              onBlur={() => {
+                setTimeout(() => setToolOpen(false), 150);
+              }}
+              placeholder="Type to search tool from catalog…"
               className={inputClass}
-              placeholder="https://…"
+              autoComplete="off"
+              required={!form.tool_id}
             />
-            {autoFilledFromCatalog && (
-              <p className="text-xs text-emerald-600 mt-1">
-                Matched catalog item — tool details and price were auto-filled.
+            <input type="hidden" name="tool_id" value={form.tool_id} required />
+
+            {toolOpen && (
+              <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-[#E2E8F0] bg-white shadow-lg">
+                {filteredTools.length === 0 ? (
+                  <li className="px-3 py-2 text-sm text-[#718096]">No match</li>
+                ) : (
+                  filteredTools.map((t) => (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-[#F8FAFC]"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setForm((prev) => ({ ...prev, tool_id: t.id }));
+                          setToolQuery(t.name);
+                          setToolOpen(false);
+                        }}
+                      >
+                        <div className="font-medium text-[#1A202C]">{t.name}</div>
+                        <div className="text-xs text-[#718096]">
+                          {[t.category, t.supplier, t.reference, t.unit_price != null ? `${t.unit_price} MAD` : null]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </div>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
+
+            {tools.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                No tools in the catalog yet. Ask an admin to add tools in the Tools page.
+              </p>
+            )}
+
+            {selectedTool && (
+              <p className="text-xs text-emerald-700 mt-1">
+                {selectedTool.supplier}
+                {selectedTool.unit_price != null ? ` · ${selectedTool.unit_price} MAD` : ""}
+                {selectedTool.reference ? ` · Ref: ${selectedTool.reference}` : ""}
               </p>
             )}
           </div>
 
+          {/* ===== QUANTITY ===== */}
           <div>
             <label className={labelClass}>
-              Tool name <span className="text-red-500">*</span>
+              Quantity <span className="text-red-500">*</span>
             </label>
             <input
-              type="text"
-              name="tool_name"
-              required
-              value={form.tool_name}
-              onChange={handleChange}
-              className={inputClass}
-              placeholder="e.g. Cordless drill"
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>Référence</label>
-            <input
-              type="text"
-              name="reference"
-              value={form.reference}
-              onChange={handleChange}
-              className={inputClass}
-              placeholder="SKU / reference"
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>Description</label>
-            <textarea
-              name="description"
-              rows={2}
-              value={form.description}
-              onChange={handleChange}
-              className={inputClass}
-              placeholder="Optional details"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelClass}>Supplier</label>
-              <input
-                type="text"
-                name="supplier"
-                value={form.supplier}
-                onChange={handleChange}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>
-                Quantity <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                name="quantity"
-                required
-                min={1}
-                value={form.quantity}
-                onChange={handleChange}
-                className={inputClass}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>Unit price (MAD, optional)</label>
-            <input
               type="number"
-              name="unit_price"
-              min={0}
-              step="0.01"
-              value={form.unit_price}
-              onChange={handleChange}
+              name="quantity"
+              required
+              min={1}
+              value={form.quantity}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, quantity: Number(e.target.value) || 1 }))
+              }
               className={inputClass}
-              placeholder="0.00"
             />
           </div>
 
+          {/* ===== NOTE ===== */}
           <div>
             <label className={labelClass}>Note</label>
             <textarea
               name="note"
               rows={2}
               value={form.note}
-              onChange={handleChange}
+              onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))}
               className={inputClass}
               placeholder="Any additional note…"
             />
