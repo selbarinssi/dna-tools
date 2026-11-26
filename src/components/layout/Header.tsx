@@ -48,10 +48,10 @@ export default function Header() {
   const navItems = [
     { href: "/", label: "Requests" },
     { href: "/coworkers", label: "Coworkers" },
+    ...(profile?.role === "admin" ? [{ href: "/tools", label: "Tools" }] : []),
     { href: "/reporting", label: "Reporting" },
     ...(profile?.role === "admin" ? [{ href: "/users", label: "Users" }] : []),
   ];
-
   return (
     <header className="bg-[#0058A3] text-white shadow-sm">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
