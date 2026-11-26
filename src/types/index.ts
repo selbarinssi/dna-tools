@@ -1,6 +1,6 @@
 // types/index.ts
 
-export type UserRole = "team_leader" | "admin";
+export type UserRole = "admin" | "team_leader" | "guest";
 
 export type RequestStatus =
   | "Submitted"
@@ -34,7 +34,8 @@ export interface Coworker {
 export interface Tool {
   id: string;
   name: string;
-  description: string | null;
+  description: string | null;   // optional short text if you still want it
+  product_url: string | null;   // product page link
   category: string | null;
   supplier: string;
   unit_price: number | null;
