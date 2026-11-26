@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Coworker, Profile, Request } from "@/types";
+import { Upload } from "lucide-react";
+import { importRequestsFromFile } from "@/lib/importRequests";
 import {
   EMPTY_FILTERS,
   REQUEST_SELECT,
@@ -57,6 +59,8 @@ export default function RequestsList() {
   const [sort, setSort] = useState<{ col: SortCol; asc: boolean }>({ col: "request_date", asc: false });
   const [filters, setFilters] = useState<RequestFilters>(EMPTY_FILTERS);
   const [searchInput, setSearchInput] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
 
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [coworkers, setCoworkers] = useState<Pick<Coworker, "id" | "name">[]>([]);
@@ -146,6 +150,31 @@ export default function RequestsList() {
     };
   }, [supabase]);
 
+  
+    const handleImportRequests = async (file: File) => {
+    if (currentUser?.role !== "admin") return;
+    setImporting(true);
+    setImportMsg(null);
+    setError(null);
+    try {
+      const result = await importRequestsFromFile(supabase, file);
+      const skipText =
+        result.skipped.length > 0
+          ? ` · ${result.skipped.length} skipped: ` +
+            result.skipped
+              .slice(0, 8)
+              .map((s) => `row ${s.row} (${s.reason})`)
+              .join("; ") +
+            (result.skipped.length > 8 ? "…" : "")
+          : "";
+      setImportMsg(`Imported ${result.imported}${skipText}`);
+      await loadData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
   // --- helpers ---
   const updateFilter = (patch: Partial<RequestFilters>) => {
     setFilters((f) => ({ ...f, ...patch }));
@@ -202,11 +231,30 @@ export default function RequestsList() {
             {hasActiveFilters(filters) ? " match your filters" : ""}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3">
           <button onClick={exportCsv} disabled={exporting} className={btnGhost} title="Export the filtered list for Excel">
             <Download size={16} />
             {exporting ? "Exporting…" : "Export"}
           </button>
+
+          {currentUser?.role === "admin" && (
+            <label className={`${btnGhost} cursor-pointer inline-flex items-center gap-2`}>
+              <Upload size={16} />
+              {importing ? "Importing…" : "Import Excel"}
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+                className="hidden"
+                disabled={importing}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleImportRequests(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
+
           <button onClick={() => loadData()} className="p-2 rounded-md border border-[#E2E8F0] hover:bg-gray-50 text-[#4A5568]" title="Refresh">
             <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
           </button>
@@ -290,6 +338,11 @@ export default function RequestsList() {
 </div>
 
       {error && <div className={errorBox}>{error}</div>}
+            {importMsg && (
+        <div className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-md px-4 py-3">
+          {importMsg}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm overflow-hidden">
