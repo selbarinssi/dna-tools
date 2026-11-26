@@ -467,7 +467,7 @@ export default function ToolsManager() {
                 />
               </div>
 
-                            <div>
+                                          <div>
                 <label className="block text-sm font-medium text-[#1A202C] mb-1">Price</label>
                 <input
                   type="number"
@@ -477,4 +477,50 @@ export default function ToolsManager() {
                   onChange={(e) => setForm((p) => ({ ...p, unit_price: e.target.value }))}
                   className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0058A3]"
                 />
-              </div> 
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[#1A202C] mb-1">Reference</label>
+                <input
+                  type="text"
+                  value={form.reference}
+                  onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
+                  className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0058A3]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="tool_active"
+                  checked={form.is_active}
+                  onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
+                />
+                <label htmlFor="tool_active" className="text-sm text-[#1A202C]">
+                  Active
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="px-4 py-2 text-sm border border-[#E2E8F0] rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 text-sm bg-[#0058A3] hover:bg-[#003D73] text-white rounded-md disabled:opacity-60"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
