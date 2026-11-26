@@ -242,7 +242,7 @@ export default function RequestDetail({ requestId, currentUser, onClose, onChang
               )}
 
               <dl className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
-                <Item label="Coworker" value={req.coworker ? `${req.coworker.name}${req.coworker.team ? ` (${req.coworker.team})` : ""}` : "—"} />
+                <Item label="Coworker" value={req.coworker ? `${req.coworker.name}${req.coworker.job_type ? ` (${req.coworker.job_type})` : ""}` : "—"} />
                 <Item label="Requested by" value={requesterName(req)} />
                 <Item label="Request date" value={fmtDate(req.request_date)} />
                 <Item label="Handover date" value={fmtDate(req.handover_date)} />
@@ -325,7 +325,7 @@ export default function RequestDetail({ requestId, currentUser, onClose, onChang
                   {coworkers
                     .filter((c) => c.is_active || c.id === form.coworker_id)
                     .map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}{c.team ? ` (${c.team})` : ""}</option>
+                      <option key={c.id} value={c.id}>{c.name}{c.job_type ? ` (${c.job_type})` : ""}</option>
                     ))}
                 </select>
               </div>
