@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Coworker, Profile } from "@/types";
 import { Plus, Pencil, Trash2, X, RefreshCw, Upload } from "lucide-react";
+import { readSpreadsheet, col } from "@/lib/excel";
 
 export default function CoworkersManager() {
   const supabase = createClient();
@@ -126,38 +127,30 @@ export default function CoworkersManager() {
     loadData();
   };
 
-  // CSV format expected:
-  // Id,Agent Name,Job Type,TL
+    // Excel/CSV columns: Id | Agent Name | Job Type | TL
+  // MERGE: same Id → update; new Id → insert; missing from file → left alone
   const handleImport = async (file: File) => {
     if (!isAdmin) return;
     setImporting(true);
     setError(null);
 
     try {
-      const text = await file.text();
-      const lines = text
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean);
+      const rows = await readSpreadsheet(file);
 
-      if (lines.length < 2) throw new Error("File is empty or missing header");
-
-      const rows = lines.slice(1).map((line) => {
-        const parts = line.split(",").map((p) => p.trim().replace(/^"|"$/g, ""));
-        return {
-          external_id: parts[0] || null,
-          name: parts[1],
-          job_type: parts[2] || null,
-          tl: parts[3] || null,
+      const payload = rows
+        .map((row) => ({
+          external_id: col(row, "Id", "ID", "id") || null,
+          name: col(row, "Agent Name", "Name", "name"),
+          job_type: col(row, "Job Type", "JobType", "job_type") || null,
+          tl: col(row, "TL", "Team Leader", "tl") || null,
           is_active: true,
-        };
-      });
+        }))
+        .filter((r) => r.name);
 
-      const payload = rows.filter((r) => r.name);
+      if (payload.length === 0) {
+        throw new Error("No valid rows found. Expected columns: Id, Agent Name, Job Type, TL");
+      }
 
-      if (payload.length === 0) throw new Error("No valid rows found");
-
-      // Upsert by external_id when present
       const withId = payload.filter((r) => r.external_id);
       const withoutId = payload.filter((r) => !r.external_id);
 
@@ -241,10 +234,10 @@ export default function CoworkersManager() {
             <>
               <label className="inline-flex items-center gap-2 px-3 py-2 text-sm border border-[#E2E8F0] rounded-md cursor-pointer hover:bg-gray-50 text-[#1A202C]">
                 <Upload size={16} />
-                {importing ? "Importing…" : "Import CSV"}
+                {importing ? "Importing…" : "Import Excel"}
                 <input
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                   className="hidden"
                   disabled={importing}
                   onChange={(e) => {
