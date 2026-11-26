@@ -8,7 +8,7 @@ import { STATUS_TRANSITIONS } from "@/lib/constants";
 import { inputClass, labelClass, btnPrimary, btnGhost, errorBox } from "@/components/ui/styles";
 import StatusBadge from "./StatusBadge";
 import { format } from "date-fns";
-import { X, Pencil, ExternalLink } from "lucide-react";
+import { X, Pencil, ExternalLink, Trash2 } from "lucide-react";
 
 interface Props {
   requestId: string | null;
@@ -172,6 +172,32 @@ export default function RequestDetail({ requestId, currentUser, onClose, onChang
     });
   };
 
+    const deleteRequest = async () => {
+    if (!req || !isAdmin) return;
+    if (
+      !confirm(
+        `Delete request "${req.tool_name}" permanently?\nThis cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    // History first (FK), then request
+    await supabase.from("request_status_history").delete().eq("request_id", req.id);
+    const { error: err } = await supabase.from("requests").delete().eq("id", req.id);
+
+    setBusy(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    onChanged();
+    onClose();
+  };
+
   if (!requestId) return null;
 
   const total = req ? lineTotal(req) : null;
@@ -267,15 +293,29 @@ export default function RequestDetail({ requestId, currentUser, onClose, onChang
                 <div className="col-span-2"><Item label="Note" value={req.note || "—"} /></div>
               </dl>
 
-              <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                 {canEdit && (
                   <button onClick={startEdit} className={btnGhost}>
                     <Pencil size={15} /> Edit
                   </button>
                 )}
                 {canCancelOwn && (
-                  <button onClick={cancelOwn} disabled={busy} className="px-4 py-2 text-sm rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-60">
+                  <button
+                    onClick={cancelOwn}
+                    disabled={busy}
+                    className="px-4 py-2 text-sm rounded-md border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-60"
+                  >
                     Cancel request
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={deleteRequest}
+                    disabled={busy}
+                    className="px-4 py-2 text-sm rounded-md border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-60 inline-flex items-center gap-1.5"
+                  >
+                    <Trash2 size={15} />
+                    Delete
                   </button>
                 )}
               </div>
