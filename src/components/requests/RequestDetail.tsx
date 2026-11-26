@@ -279,17 +279,24 @@ export default function RequestDetail({ requestId, currentUser, onClose, onChang
                   label="Unit price / total"
                   value={req.unit_price === null ? "—" : `${formatMoney(req.unit_price)} / ${formatMoney(total ?? 0)}`}
                 />
-                <div className="col-span-2">
+                                <div className="col-span-2">
                   <dt className="text-xs text-[#718096]">Product link</dt>
-                  <dd>
+                  <dd className="mt-0.5">
                     {req.supplier_url ? (
-                      <a href={req.supplier_url} target="_blank" rel="noopener noreferrer" className="text-[#0058A3] hover:underline inline-flex items-center gap-1 break-all">
-                        {req.supplier_url} <ExternalLink size={14} />
+                      <a
+                        href={req.supplier_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-lg hover:opacity-80"
+                        title={req.supplier_url}
+                      >
+                        🔗 <span className="text-sm text-[#0058A3]">Open product page</span>
                       </a>
-                    ) : "—"}
+                    ) : (
+                      <span className="text-[#718096]">—</span>
+                    )}
                   </dd>
                 </div>
-                <div className="col-span-2"><Item label="Description" value={req.description || "—"} /></div>
                 <div className="col-span-2"><Item label="Note" value={req.note || "—"} /></div>
               </dl>
 
