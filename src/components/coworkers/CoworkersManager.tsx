@@ -135,9 +135,9 @@ export default function CoworkersManager() {
     setError(null);
 
     try {
-      const rows = await readSpreadsheet(file);
+            const rows = await readSpreadsheet(file);
 
-      const payload = rows
+      const mapped = rows
         .map((row) => ({
           external_id: col(row, "Id", "ID", "id") || null,
           name: col(row, "Agent Name", "Name", "name"),
@@ -147,12 +147,23 @@ export default function CoworkersManager() {
         }))
         .filter((r) => r.name);
 
-      if (payload.length === 0) {
+      if (mapped.length === 0) {
         throw new Error("No valid rows found. Expected columns: Id, Agent Name, Job Type, TL");
       }
 
-      const withId = payload.filter((r) => r.external_id);
-      const withoutId = payload.filter((r) => !r.external_id);
+      // Last row wins if the same Id appears twice in the file
+      const byId = new Map<string, (typeof mapped)[0]>();
+      const withoutId: typeof mapped = [];
+
+      for (const r of mapped) {
+        if (r.external_id) {
+          byId.set(r.external_id, r);
+        } else {
+          withoutId.push(r);
+        }
+      }
+
+      const withId = Array.from(byId.values());
 
       if (withId.length > 0) {
         const { error: upsertError } = await supabase.from("coworkers").upsert(withId, {
