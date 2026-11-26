@@ -23,6 +23,7 @@ export default function CoworkersManager() {
     tl: "",
     is_active: true,
   });
+    const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -61,6 +62,16 @@ export default function CoworkersManager() {
   }, [loadData]);
 
   const isAdmin = currentUser?.role === "admin";
+    const filtered = coworkers.filter((c) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.name.toLowerCase().includes(q) ||
+      (c.external_id && c.external_id.toLowerCase().includes(q)) ||
+      (c.job_type && c.job_type.toLowerCase().includes(q)) ||
+      (c.tl && c.tl.toLowerCase().includes(q))
+    );
+  });
 
   const openCreate = () => {
     setEditingId(null);
@@ -224,15 +235,23 @@ export default function CoworkersManager() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-[#1A202C]">Coworkers</h1>
           <p className="text-sm text-[#4A5568] mt-0.5">
-            {coworkers.length} coworker{coworkers.length !== 1 ? "s" : ""}
+            {filtered.length} coworker{filtered.length !== 1 ? "s" : ""}
+            {search.trim() ? ` (filtered)` : ""}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search coworkers…"
+            className="px-3 py-2 text-sm border border-[#E2E8F0] rounded-md w-full sm:w-64"
+          />
           <button
             onClick={() => loadData()}
             className="p-2 rounded-md border border-[#E2E8F0] hover:bg-gray-50 text-[#4A5568]"
@@ -280,10 +299,12 @@ export default function CoworkersManager() {
       <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm overflow-hidden">
         {loading && coworkers.length === 0 ? (
           <div className="p-12 text-center text-[#4A5568]">Loading…</div>
-        ) : coworkers.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-[#4A5568]">
-            No coworkers yet.
-            {isAdmin && " Click Add Coworker or Import CSV."}
+            {search.trim()
+              ? "No coworkers match your search."
+              : "No coworkers yet."}
+            {!search.trim() && isAdmin && " Click Add Coworker or Import Excel."}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -301,7 +322,7 @@ export default function CoworkersManager() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E2E8F0]">
-                {coworkers.map((c) => (
+                {filtered.map((c) => (
                   <tr key={c.id} className="hover:bg-[#F8FAFC]">
                     <td className="px-4 py-3 text-[#4A5568]">{c.external_id || "—"}</td>
                     <td className="px-4 py-3 font-medium text-[#1A202C]">{c.name}</td>
