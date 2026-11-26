@@ -6,7 +6,7 @@ export type ImportResult = {
   skipped: { row: number; reason: string }[];
 };
 
-/** Parse DD/MM/YYYY or YYYY-MM-DD or Excel-ish strings → YYYY-MM-DD */
+/** Parse many date shapes → YYYY-MM-DD */
 export function parseDate(raw: string): string | null {
   const s = raw.trim();
   if (!s) return null;
@@ -14,19 +14,43 @@ export function parseDate(raw: string): string | null {
   // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
 
-  // DD/MM/YYYY or DD-MM-YYYY
-  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  // D/M/YY, M/D/YY, DD/MM/YYYY, MM/DD/YYYY, with / - or .
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/);
   if (m) {
-    const dd = m[1].padStart(2, "0");
-    const mm = m[2].padStart(2, "0");
-    const yyyy = m[3];
-    return `${yyyy}-${mm}-${dd}`;
+    let a = parseInt(m[1], 10);
+    let b = parseInt(m[2], 10);
+    let y = parseInt(m[3], 10);
+    if (y < 100) y += 2000; // 25 → 2025
+
+    let day: number;
+    let month: number;
+
+    if (a > 12 && b <= 12) {
+      // 13/10/2025 → day/month
+      day = a;
+      month = b;
+    } else if (b > 12 && a <= 12) {
+      // 10/13/2025 → month/day
+      month = a;
+      day = b;
+    } else {
+      // Both <= 12: Excel often shows US style 10/1/25 = Oct 1
+      // (matches your file: 10/1/25, 10/6/25)
+      month = a;
+      day = b;
+    }
+
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+    const mm = String(month).padStart(2, "0");
+    const dd = String(day).padStart(2, "0");
+    return `${y}-${mm}-${dd}`;
   }
 
-  // Excel serial (number as string)
-  const n = Number(s);
+  // Excel serial number as string
+  const n = Number(s.replace(",", "."));
   if (Number.isFinite(n) && n > 20000 && n < 100000) {
-    const utc = Date.UTC(1899, 11, 30) + n * 86400000;
+    const utc = Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000;
     const d = new Date(utc);
     const yyyy = d.getUTCFullYear();
     const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
