@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Sans } from "next/font/google";
 import "./globals.css";
+import Header from "@/components/layout/Header";
 
 const notoSans = Noto_Sans({
   subsets: ["latin"],
@@ -13,14 +14,11 @@ export const metadata: Metadata = {
   description: "Tool request system for D&A teams",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${notoSans.variable} antialiased`}>
+      <body>
+        <Header />
         {children}
       </body>
     </html>
