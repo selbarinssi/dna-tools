@@ -18,7 +18,7 @@ export default function ToolsManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
-    description: "",
+    product_url: "",
     category: "",
     supplier: "Bricoma",
     unit_price: "",
@@ -68,7 +68,7 @@ export default function ToolsManager() {
     setEditingId(null);
     setForm({
       name: "",
-      description: "",
+      product_url: "",
       category: "",
       supplier: "Bricoma",
       unit_price: "",
@@ -82,10 +82,10 @@ export default function ToolsManager() {
     setEditingId(t.id);
     setForm({
       name: t.name,
-      description: t.description || "",
+      product_url: t.product_url || "",
       category: t.category || "",
       supplier: t.supplier || "Bricoma",
-      unit_price: t.unit_price === null ? "" : String(t.unit_price),
+      unit_price: t.unit_price === null || t.unit_price === undefined ? "" : String(t.unit_price),
       reference: t.reference || "",
       is_active: t.is_active,
     });
@@ -101,7 +101,7 @@ export default function ToolsManager() {
 
     const payload = {
       name: form.name.trim(),
-      description: form.description.trim() || null,
+      product_url: form.product_url.trim() || null,
       category: form.category.trim() || null,
       supplier: form.supplier.trim() || "Bricoma",
       unit_price: form.unit_price ? Number(form.unit_price) : null,
@@ -135,12 +135,8 @@ export default function ToolsManager() {
     loadData();
   };
 
-    // Excel/CSV: Tool Name | Description | Category | Supplier | Price | Reference
-  // Behavior: MERGE
-  //   - If Reference is filled and already exists → update that tool
-  //   - Else if same Tool Name already exists → update the first match
-  //   - Else → insert new tool
-  //   - Tools not in the file are left untouched
+  // Excel columns: Tool Name | Link | Category | Supplier | Price | Reference
+  // MERGE: same Reference or same Name → update; else insert
   const handleImport = async (file: File) => {
     if (!isAdmin) return;
     setImporting(true);
@@ -152,7 +148,8 @@ export default function ToolsManager() {
       const mapped = rows
         .map((row) => ({
           name: col(row, "Tool Name", "Name", "name"),
-          description: col(row, "Description", "description") || null,
+          product_url:
+            col(row, "Link", "Product Link", "URL", "product_url", "Description") || null,
           category: col(row, "Category", "category") || null,
           supplier: col(row, "Supplier", "supplier") || "Bricoma",
           unit_price: (() => {
@@ -168,11 +165,10 @@ export default function ToolsManager() {
 
       if (mapped.length === 0) {
         throw new Error(
-          "No valid rows found. Expected columns: Tool Name, Description, Category, Supplier, Price, Reference"
+          "No valid rows found. Expected columns: Tool Name, Link, Category, Supplier, Price, Reference"
         );
       }
 
-      // Load existing tools once to decide update vs insert
       const { data: existing, error: loadErr } = await supabase
         .from("tools")
         .select("id, name, reference");
@@ -323,7 +319,7 @@ export default function ToolsManager() {
         ) : tools.length === 0 ? (
           <div className="p-12 text-center text-[#4A5568]">
             No tools yet.
-            {isAdmin && " Click Add Tool or Import CSV."}
+            {isAdmin && " Click Add Tool or Import Excel."}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -331,7 +327,7 @@ export default function ToolsManager() {
               <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
                 <tr>
                   <th className="text-left px-4 py-3 font-medium text-[#4A5568]">Tool Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-[#4A5568]">Description</th>
+                  <th className="text-left px-4 py-3 font-medium text-[#4A5568]">Link</th>
                   <th className="text-left px-4 py-3 font-medium text-[#4A5568]">Category</th>
                   <th className="text-left px-4 py-3 font-medium text-[#4A5568]">Supplier</th>
                   <th className="text-right px-4 py-3 font-medium text-[#4A5568]">Price</th>
@@ -346,13 +342,25 @@ export default function ToolsManager() {
                 {tools.map((t) => (
                   <tr key={t.id} className="hover:bg-[#F8FAFC]">
                     <td className="px-4 py-3 font-medium text-[#1A202C]">{t.name}</td>
-                    <td className="px-4 py-3 text-[#4A5568] max-w-xs truncate">
-                      {t.description || "—"}
+                    <td className="px-4 py-3">
+                      {t.product_url ? (
+                        <a
+                          href={t.product_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={t.product_url}
+                          className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-blue-50 text-lg"
+                        >
+                          🔗
+                        </a>
+                      ) : (
+                        <span className="text-[#718096]">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-[#4A5568]">{t.category || "—"}</td>
                     <td className="px-4 py-3 text-[#4A5568]">{t.supplier}</td>
                     <td className="px-4 py-3 text-right text-[#4A5568]">
-                      {t.unit_price === null ? "—" : t.unit_price}
+                      {t.unit_price === null || t.unit_price === undefined ? "—" : t.unit_price}
                     </td>
                     <td className="px-4 py-3 text-[#4A5568]">{t.reference || "—"}</td>
                     <td className="px-4 py-3">
@@ -427,12 +435,15 @@ export default function ToolsManager() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#1A202C] mb-1">Description</label>
-                <textarea
-                  rows={2}
-                  value={form.description}
-                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                <label className="block text-sm font-medium text-[#1A202C] mb-1">
+                  Link (product page)
+                </label>
+                <input
+                  type="url"
+                  value={form.product_url}
+                  onChange={(e) => setForm((p) => ({ ...p, product_url: e.target.value }))}
                   className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0058A3]"
+                  placeholder="https://www.bricoma.ma/..."
                 />
               </div>
 
@@ -464,52 +475,4 @@ export default function ToolsManager() {
                   step="0.01"
                   value={form.unit_price}
                   onChange={(e) => setForm((p) => ({ ...p, unit_price: e.target.value }))}
-                  className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0058A3]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-[#1A202C] mb-1">Reference</label>
-                <input
-                  type="text"
-                  value={form.reference}
-                  onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
-                  className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0058A3]"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="tool_active"
-                  checked={form.is_active}
-                  onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
-                />
-                <label htmlFor="tool_active" className="text-sm text-[#1A202C]">
-                  Active
-                </label>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="px-4 py-2 text-sm border border-[#E2E8F0] rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-4 py-2 text-sm bg-[#0058A3] hover:bg-[#003D73] text-white rounded-md disabled:opacity-60"
-                >
-                  {saving ? "Saving…" : "Save"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                  className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md 
