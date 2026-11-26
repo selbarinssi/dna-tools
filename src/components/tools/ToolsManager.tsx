@@ -467,7 +467,7 @@ export default function ToolsManager() {
                 />
               </div>
 
-              <div>
+                            <div>
                 <label className="block text-sm font-medium text-[#1A202C] mb-1">Price</label>
                 <input
                   type="number"
@@ -475,4 +475,6 @@ export default function ToolsManager() {
                   step="0.01"
                   value={form.unit_price}
                   onChange={(e) => setForm((p) => ({ ...p, unit_price: e.target.value }))}
-                  className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md 
+                  className="w-full px-3 py-2 border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0058A3]"
+                />
+              </div> 
