@@ -10,9 +10,18 @@ import { cn } from "@/lib/utils";
 
 export default function Header() {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [roleReady, setRoleReady] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
+
+  // Instant role on refresh (avoids Tools/Users blinking away)
+  const cachedRole =
+    typeof window !== "undefined"
+      ? (sessionStorage.getItem("dna_role") as Profile["role"] | null)
+      : null;
+  const effectiveRole = profile?.role ?? cachedRole;
+  const isAdmin = effectiveRole === "admin";
 
   useEffect(() => {
     let cancelled = false;
@@ -23,7 +32,11 @@ export default function Header() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        if (!cancelled) setProfile(null);
+        if (!cancelled) {
+          setProfile(null);
+          sessionStorage.removeItem("dna_role");
+          setRoleReady(true);
+        }
         return;
       }
 
@@ -33,7 +46,14 @@ export default function Header() {
         .eq("id", user.id)
         .single();
 
-      if (!cancelled && data) setProfile(data as Profile);
+      if (!cancelled) {
+        if (data) {
+          const p = data as Profile;
+          setProfile(p);
+          sessionStorage.setItem("dna_role", p.role);
+        }
+        setRoleReady(true);
+      }
     };
 
     loadProfile();
@@ -42,7 +62,8 @@ export default function Header() {
     };
   }, [supabase]);
 
-  const handleLogout = async () => {
+    const handleLogout = async () => {
+    sessionStorage.removeItem("dna_role");
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
