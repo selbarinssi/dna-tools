@@ -1,6 +1,6 @@
 // types/index.ts
 
-export type UserRole = "admin" | "team_leader" | "guest";
+export type UserRole = "team_leader" | "admin";
 
 export type RequestStatus =
   | "Submitted"
@@ -24,12 +24,11 @@ export interface Profile {
 export interface Coworker {
   id: string;
   external_id: string | null;
-  name: string;          // Agent Name
+  name: string;
   job_type: string | null;
-  tl: string | null;     // Team Leader
+  tl: string | null;
   is_active: boolean;
   created_at: string;
-  // team?: string | null;  // optional if you still keep the column
 }
 
 export interface Tool {
@@ -47,8 +46,9 @@ export interface Tool {
 export interface Request {
   id: string;
   request_date: string;
-  requested_by: string; // profile id
+  requested_by: string;
   coworker_id: string;
+  tool_id: string | null;
   tool_name: string;
   reference: string | null;
   description: string | null;
@@ -63,9 +63,9 @@ export interface Request {
   created_at: string;
   updated_at: string;
 
-  // Joined fields (optional)
   requester?: Pick<Profile, "id" | "full_name" | "email" | "role"> | null;
-  coworker?: Pick<Coworker, "id" | "name" | "team"> | null;
+  coworker?: Pick<Coworker, "id" | "name" | "job_type" | "tl"> | null;
+  tool?: Pick<Tool, "id" | "name" | "reference" | "category"> | null;
 }
 
 export interface StatusHistoryEntry {
