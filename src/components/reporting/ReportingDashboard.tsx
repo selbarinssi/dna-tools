@@ -27,6 +27,7 @@ interface Group {
 
 type SortKey = "name" | "count" | "qty" | "spend";
 type SortDir = "asc" | "desc";
+type CategoryMode = "type" | "sub"; // type = OpEx/CapEx, sub = catalog categories
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -64,6 +65,30 @@ function leadDays(r: Request): number | null {
   );
 }
 
+/** Catalog category text */
+function rawCategory(
+  r: Request,
+  tools: Tool[]
+): string {
+  const joined = (r as Request & { tool?: { category?: string | null } }).tool;
+  if (joined?.category) return joined.category;
+  if (r.reference) {
+    const t = tools.find(
+      (x) => x.reference && x.reference.toLowerCase() === r.reference!.toLowerCase()
+    );
+    if (t?.category) return t.category;
+  }
+  const t2 = tools.find(
+    (x) => x.name.toLowerCase() === (r.tool_name || "").toLowerCase()
+  );
+  return t2?.category || "Uncategorized";
+}
+
+/** OpEx if category contains CONSUMABLE (any case), else CapEx */
+function expenseType(category: string): "OpEx" | "CapEx" {
+  return category.toUpperCase().includes("CONSUMABLE") ? "OpEx" : "CapEx";
+}
+
 export default function ReportingDashboard() {
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<Request[]>([]);
@@ -73,6 +98,7 @@ export default function ReportingDashboard() {
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState("");
 
+  const [categoryMode, setCategoryMode] = useState<CategoryMode>("type");
   const [category, setCategory] = useState("all");
   const [toolQuery, setToolQuery] = useState("");
 
@@ -128,39 +154,36 @@ export default function ReportingDashboard() {
     load();
   }, [load]);
 
-  const categoryOf = useCallback(
+  // Label used for filter + grouping (depends on mode)
+  const categoryLabel = useCallback(
     (r: Request): string => {
-      const joined = (r as Request & { tool?: { category?: string | null } }).tool;
-      if (joined?.category) return joined.category;
-      if (r.reference) {
-        const t = tools.find(
-          (x) => x.reference && x.reference.toLowerCase() === r.reference!.toLowerCase()
-        );
-        if (t?.category) return t.category;
-      }
-      const t2 = tools.find(
-        (x) => x.name.toLowerCase() === (r.tool_name || "").toLowerCase()
-      );
-      return t2?.category || "Uncategorized";
+      const raw = rawCategory(r, tools);
+      return categoryMode === "type" ? expenseType(raw) : raw;
     },
-    [tools]
+    [tools, categoryMode]
   );
 
-  const categories = useMemo(() => {
+  const filterOptions = useMemo(() => {
+    if (categoryMode === "type") return ["OpEx", "CapEx"];
     const set = new Set<string>();
-    for (const r of rows) set.add(categoryOf(r));
+    for (const r of rows) set.add(rawCategory(r, tools));
     for (const t of tools) if (t.category) set.add(t.category);
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [rows, tools, categoryOf]);
+  }, [rows, tools, categoryMode]);
+
+  // Reset filter when switching mode
+  useEffect(() => {
+    setCategory("all");
+  }, [categoryMode]);
 
   const filtered = useMemo(() => {
     const q = toolQuery.trim().toLowerCase();
     return rows.filter((r) => {
-      if (category !== "all" && categoryOf(r) !== category) return false;
+      if (category !== "all" && categoryLabel(r) !== category) return false;
       if (q && !(r.tool_name || "").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [rows, category, toolQuery, categoryOf]);
+  }, [rows, category, toolQuery, categoryLabel]);
 
   const stats = useMemo(() => {
     const byStatus: Record<string, number> = {};
@@ -189,19 +212,28 @@ export default function ReportingDashboard() {
       }
     }
 
-    const CAP = 30;
+    const CAP = 14; // shorter default range; expand shows up to 30+
+    const leadCap = expandLead ? 30 : CAP;
     const leadDistribution: { days: string; dayNum: number; count: number }[] = [];
-    for (let d = 0; d <= Math.min(leadMax, CAP); d++) {
+    for (let d = 0; d <= Math.min(leadMax, leadCap); d++) {
+      const count = leadBuckets.get(d) || 0;
+      if (!expandLead && count === 0) continue;
       leadDistribution.push({
-        days: d === 1 ? "1 day" : `${d} days`,
+        days: d === 0 ? "Same day" : d === 1 ? "1 day" : `${d} days`,
         dayNum: d,
-        count: leadBuckets.get(d) || 0,
+        count,
       });
     }
-    if (leadMax > CAP) {
+    if (leadMax > leadCap) {
       let over = 0;
-      for (const [d, c] of leadBuckets) if (d > CAP) over += c;
-      leadDistribution.push({ days: `${CAP}+ days`, dayNum: CAP + 1, count: over });
+      for (const [d, c] of leadBuckets) if (d > leadCap) over += c;
+      if (over > 0) {
+        leadDistribution.push({
+          days: `${leadCap}+ days`,
+          dayNum: leadCap + 1,
+          count: over,
+        });
+      }
     }
 
     const monthMap = new Map<string, { month: string; count: number; spend: number }>();
@@ -223,14 +255,14 @@ export default function ReportingDashboard() {
       leadDistribution,
       byMonth: Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month)),
       byRequester: groupBy(filtered, (r) => r.requester?.id ?? "unknown", requesterName),
-      byCategory: groupBy(filtered, (r) => categoryOf(r), (r) => categoryOf(r)),
+      byCategory: groupBy(filtered, (r) => categoryLabel(r), (r) => categoryLabel(r)),
       byCoworker: groupBy(
         filtered,
         (r) => r.coworker?.id ?? "unknown",
         (r) => r.coworker?.name ?? "Unknown"
       ),
     };
-  }, [filtered, categoryOf]);
+  }, [filtered, categoryLabel, expandLead]);
 
   const byRequesterSorted = useMemo(
     () => sortGroups(stats.byRequester, reqSort.key, reqSort.dir),
@@ -260,6 +292,7 @@ export default function ReportingDashboard() {
         "Request date",
         "Tool",
         "Category",
+        "Type",
         "Coworker",
         "Requested by",
         "Qty",
@@ -269,19 +302,23 @@ export default function ReportingDashboard() {
         "Handover date",
         "Days to deliver",
       ],
-      ...filtered.map((r) => [
-        r.request_date,
-        r.tool_name,
-        categoryOf(r),
-        r.coworker?.name,
-        requesterName(r),
-        r.quantity,
-        r.unit_price,
-        lineTotal(r),
-        r.status,
-        r.handover_date,
-        leadDays(r),
-      ]),
+      ...filtered.map((r) => {
+        const raw = rawCategory(r, tools);
+        return [
+          r.request_date,
+          r.tool_name,
+          raw,
+          expenseType(raw),
+          r.coworker?.name,
+          requesterName(r),
+          r.quantity,
+          r.unit_price,
+          lineTotal(r),
+          r.status,
+          r.handover_date,
+          leadDays(r),
+        ];
+      }),
     ]);
 
   const maxMonth = Math.max(1, ...stats.byMonth.map((m) => m.count));
@@ -300,8 +337,8 @@ export default function ReportingDashboard() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="space-y-5">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-[#1A202C]">Reporting</h1>
           <p className="text-sm text-[#4A5568] mt-0.5">
@@ -332,14 +369,14 @@ export default function ReportingDashboard() {
             type="date"
             value={from ?? ""}
             onChange={(e) => setFrom(e.target.value)}
-            className={`${inputClass} !w-auto`}
+            className={`${inputClass} !w-auto !py-1.5`}
           />
           <span className="text-[#4A5568] text-sm">→</span>
           <input
             type="date"
             value={to}
             onChange={(e) => setTo(e.target.value)}
-            className={`${inputClass} !w-auto`}
+            className={`${inputClass} !w-auto !py-1.5`}
           />
           <button onClick={exportCsv} disabled={filtered.length === 0} className={btnGhost}>
             <Download size={16} /> Export
@@ -354,172 +391,201 @@ export default function ReportingDashboard() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-[#E2E8F0] p-4 flex flex-wrap gap-3 items-end">
+      {/* Filters */}
+      <div className="bg-white rounded-lg border border-[#E2E8F0] px-4 py-3 flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-xs text-[#718096] mb-1">Category</label>
+          <label className="block text-xs text-[#718096] mb-1">Group by</label>
+          <div className="inline-flex rounded-md border border-[#E2E8F0] overflow-hidden text-sm">
+            <button
+              type="button"
+              onClick={() => setCategoryMode("type")}
+              className={`px-3 py-1.5 ${
+                categoryMode === "type"
+                  ? "bg-[#0058A3] text-white"
+                  : "bg-white text-[#4A5568] hover:bg-gray-50"
+              }`}
+            >
+              Type (OpEx / CapEx)
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryMode("sub")}
+              className={`px-3 py-1.5 border-l border-[#E2E8F0] ${
+                categoryMode === "sub"
+                  ? "bg-[#0058A3] text-white"
+                  : "bg-white text-[#4A5568] hover:bg-gray-50"
+              }`}
+            >
+              Subcategories
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs text-[#718096] mb-1">
+            {categoryMode === "type" ? "Type" : "Category"}
+          </label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
-            className={`${inputClass} !w-auto min-w-[160px]`}
+            className={`${inputClass} !w-auto min-w-[140px] !py-1.5`}
           >
-            <option value="all">All categories</option>
-            {categories.map((c) => (
+            <option value="all">All</option>
+            {filterOptions.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
           </select>
         </div>
-        <div className="flex-1 min-w-[200px]">
+
+        <div className="flex-1 min-w-[180px]">
           <label className="block text-xs text-[#718096] mb-1">Tool name</label>
           <input
             type="search"
             value={toolQuery}
             onChange={(e) => setToolQuery(e.target.value)}
             placeholder="Filter by tool name…"
-            className={inputClass}
+            className={`${inputClass} !py-1.5`}
           />
         </div>
+
         {(category !== "all" || toolQuery.trim()) && (
           <button
             type="button"
-            className={`${btnGhost} !py-2`}
+            className={`${btnGhost} !py-1.5`}
             onClick={() => {
               setCategory("all");
               setToolQuery("");
             }}
           >
-            Clear filters
+            Clear
           </button>
         )}
       </div>
 
       {error && <div className={errorBox}>{error}</div>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI cards — tighter */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card label="Total requests" value={String(filtered.length)} />
-        <Card label="Open (not yet delivered)" value={String(stats.open)} accent />
+        <Card label="Open" value={String(stats.open)} accent />
         <Card
-          label="Spend (excl. rejected/cancelled)"
+          label="Spend"
           value={formatMoney(stats.spend)}
           hint={
             stats.missingPrice > 0
-              ? `${stats.missingPrice} request(s) have no price`
+              ? `${stats.missingPrice} without price`
               : undefined
           }
         />
         <Card
           label="Avg. time to deliver"
-          value={stats.avgLead === null ? "—" : `${stats.avgLead.toFixed(1)} days`}
-          hint={
-            stats.leadCount
-              ? `${stats.leadCount} delivered with handover date`
-              : "Request date → handover date"
-          }
+          value={stats.avgLead === null ? "—" : `${stats.avgLead.toFixed(1)} d`}
+          hint={stats.leadCount ? `${stats.leadCount} delivered` : undefined}
         />
       </div>
 
-      <Panel title="Time to deliver (days from request → handover)">
-        {stats.leadDistribution.every((d) => d.count === 0) ? (
-          <div className="p-6 text-sm text-[#4A5568]">
-            No delivered/closed requests with a handover date in this selection.
-          </div>
+      {/* Time to deliver — compact */}
+      <Panel title="Time to deliver" dense>
+        {stats.leadDistribution.length === 0 ? (
+          <div className="px-4 py-3 text-sm text-[#4A5568]">No handover data in selection.</div>
         ) : (
-          <div className="p-5 space-y-2">
+          <div className="px-4 py-3 space-y-1.5">
             <div
               className={
-                expandLead ? "space-y-2" : "space-y-2 max-h-64 overflow-y-auto pr-1"
+                expandLead ? "space-y-1.5" : "space-y-1.5 max-h-40 overflow-y-auto pr-1"
               }
             >
-              {stats.leadDistribution
-                .filter((d) => expandLead || d.count > 0)
-                .map((d) => (
-                  <div key={d.dayNum} className="flex items-center gap-3 text-sm">
-                    <div className="w-24 text-[#4A5568] shrink-0">{d.days}</div>
-                    <div className="flex-1 bg-[#F1F5F9] rounded h-5 overflow-hidden">
-                      <div
-                        className="bg-[#FFDA1A] h-full"
-                        style={{ width: `${(d.count / maxLead) * 100}%` }}
-                      />
-                    </div>
-                    <div className="w-12 text-right font-medium">{d.count}</div>
+              {stats.leadDistribution.map((d) => (
+                <div key={d.dayNum} className="flex items-center gap-2 text-sm">
+                  <div className="w-20 text-[#4A5568] shrink-0 text-xs">{d.days}</div>
+                  <div className="flex-1 bg-[#F1F5F9] rounded h-3.5 overflow-hidden">
+                    <div
+                      className="bg-[#FFDA1A] h-full"
+                      style={{ width: `${(d.count / maxLead) * 100}%` }}
+                    />
                   </div>
-                ))}
+                  <div className="w-8 text-right font-medium text-xs">{d.count}</div>
+                </div>
+              ))}
             </div>
-            <div className="flex items-center justify-between pt-2">
-              <p className="text-xs text-[#718096]">
-                Same-day = 0 days. Only Delivered / Closed with handover date.
-              </p>
+            <div className="flex justify-end">
               <button
                 type="button"
-                className="text-sm text-[#0058A3] hover:underline"
+                className="text-xs text-[#0058A3] hover:underline"
                 onClick={() => setExpandLead((v) => !v)}
               >
-                {expandLead ? "Show less" : "Expand"}
+                {expandLead ? "Show less" : "Expand (all days)"}
               </button>
             </div>
           </div>
         )}
       </Panel>
 
-      <Panel title="By status">
-        <div className="p-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {REQUEST_STATUSES.map((s) => {
-            const c = STATUS_COLORS[s as RequestStatus];
-            return (
-              <div key={s} className={`rounded-md border px-3 py-2 ${c.bg} ${c.border}`}>
-                <div className={`text-xs font-medium ${c.text}`}>{s}</div>
-                <div className="text-xl font-semibold text-[#1A202C] mt-0.5">
-                  {stats.byStatus[s] ?? 0}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Panel>
-
-      <Panel title="By month">
-        {stats.byMonth.length === 0 ? (
-          <div className="p-6 text-sm text-[#4A5568]">No data</div>
-        ) : (
-          <div className="p-5 space-y-2">
-            <div
-              className={
-                expandMonth ? "space-y-2" : "space-y-2 max-h-64 overflow-y-auto pr-1"
-              }
-            >
-              {stats.byMonth.map((m) => (
-                <div key={m.month} className="flex items-center gap-3 text-sm">
-                  <div className="w-20 text-[#4A5568] shrink-0">
-                    {format(new Date(m.month + "-01"), "MMM yyyy")}
+      {/* Status + Month side by side on large screens */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Panel title="By status" dense>
+          <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {REQUEST_STATUSES.map((s) => {
+              const c = STATUS_COLORS[s as RequestStatus];
+              return (
+                <div key={s} className={`rounded-md border px-2.5 py-1.5 ${c.bg} ${c.border}`}>
+                  <div className={`text-[11px] font-medium ${c.text}`}>{s}</div>
+                  <div className="text-lg font-semibold text-[#1A202C]">
+                    {stats.byStatus[s] ?? 0}
                   </div>
-                  <div className="flex-1 bg-[#F1F5F9] rounded h-5 overflow-hidden">
-                    <div
-                      className="bg-[#0058A3] h-full"
-                      style={{ width: `${(m.count / maxMonth) * 100}%` }}
-                    />
-                  </div>
-                  <div className="w-10 text-right font-medium">{m.count}</div>
-                  <div className="w-32 text-right text-[#4A5568]">{formatMoney(m.spend)}</div>
                 </div>
-              ))}
-            </div>
-            {stats.byMonth.length > 6 && (
-              <div className="flex justify-end pt-1">
-                <button
-                  type="button"
-                  className="text-sm text-[#0058A3] hover:underline"
-                  onClick={() => setExpandMonth((v) => !v)}
-                >
-                  {expandMonth ? "Show less" : "Expand"}
-                </button>
-              </div>
-            )}
+              );
+            })}
           </div>
-        )}
-      </Panel>
+        </Panel>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Panel title="By month" dense>
+          {stats.byMonth.length === 0 ? (
+            <div className="px-4 py-3 text-sm text-[#4A5568]">No data</div>
+          ) : (
+            <div className="px-4 py-3 space-y-1.5">
+              <div
+                className={
+                  expandMonth ? "space-y-1.5" : "space-y-1.5 max-h-40 overflow-y-auto pr-1"
+                }
+              >
+                {stats.byMonth.map((m) => (
+                  <div key={m.month} className="flex items-center gap-2 text-sm">
+                    <div className="w-16 text-[#4A5568] shrink-0 text-xs">
+                      {format(new Date(m.month + "-01"), "MMM yy")}
+                    </div>
+                    <div className="flex-1 bg-[#F1F5F9] rounded h-3.5 overflow-hidden">
+                      <div
+                        className="bg-[#0058A3] h-full"
+                        style={{ width: `${(m.count / maxMonth) * 100}%` }}
+                      />
+                    </div>
+                    <div className="w-7 text-right font-medium text-xs">{m.count}</div>
+                    <div className="w-24 text-right text-[#4A5568] text-xs">
+                      {formatMoney(m.spend)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {stats.byMonth.length > 5 && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="text-xs text-[#0058A3] hover:underline"
+                    onClick={() => setExpandMonth((v) => !v)}
+                  >
+                    {expandMonth ? "Show less" : "Expand"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <SortableGroupTable
           title="By requester"
           rows={byRequesterSorted}
@@ -527,7 +593,7 @@ export default function ReportingDashboard() {
           onSort={(key) => toggleSort(reqSort, setReqSort, key)}
         />
         <SortableGroupTable
-          title="By item category"
+          title={categoryMode === "type" ? "By type (OpEx / CapEx)" : "By subcategory"}
           rows={byCategorySorted}
           sort={catSort}
           onSort={(key) => toggleSort(catSort, setCatSort, key)}
@@ -556,23 +622,31 @@ function Card({
   accent?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-lg border border-[#E2E8F0] p-5 shadow-sm">
-      <div className="text-sm text-[#4A5568]">{label}</div>
+    <div className="bg-white rounded-lg border border-[#E2E8F0] px-4 py-3 shadow-sm">
+      <div className="text-xs text-[#4A5568]">{label}</div>
       <div
-        className={`text-2xl font-semibold mt-1 ${accent ? "text-[#0058A3]" : "text-[#1A202C]"}`}
+        className={`text-xl font-semibold mt-0.5 ${accent ? "text-[#0058A3]" : "text-[#1A202C]"}`}
       >
         {value}
       </div>
-      {hint && <div className="text-xs text-[#718096] mt-1">{hint}</div>}
+      {hint && <div className="text-[11px] text-[#718096] mt-0.5">{hint}</div>}
     </div>
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  children,
+  dense,
+}: {
+  title: string;
+  children: React.ReactNode;
+  dense?: boolean;
+}) {
   return (
     <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-[#E2E8F0]">
-        <h2 className="font-semibold text-[#1A202C]">{title}</h2>
+      <div className={`border-b border-[#E2E8F0] ${dense ? "px-4 py-2.5" : "px-5 py-4"}`}>
+        <h2 className="font-semibold text-[#1A202C] text-sm">{title}</h2>
       </div>
       {children}
     </div>
@@ -596,7 +670,7 @@ function SortableGroupTable({
       <th
         className={`${
           align === "left" ? "text-left" : "text-right"
-        } px-4 py-2.5 font-medium text-[#4A5568] cursor-pointer select-none hover:text-[#0058A3]`}
+        } px-3 py-2 font-medium text-[#4A5568] cursor-pointer select-none hover:text-[#0058A3] text-xs`}
         onClick={() => onSort(key)}
       >
         {label}
@@ -606,9 +680,9 @@ function SortableGroupTable({
   };
 
   return (
-    <Panel title={title}>
+    <Panel title={title} dense>
       {rows.length === 0 ? (
-        <div className="p-6 text-sm text-[#4A5568]">No data</div>
+        <div className="px-4 py-3 text-sm text-[#4A5568]">No data</div>
       ) : (
         <table className="w-full text-sm">
           <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
@@ -622,10 +696,10 @@ function SortableGroupTable({
           <tbody className="divide-y divide-[#E2E8F0]">
             {rows.map((r) => (
               <tr key={r.key} className="hover:bg-[#F8FAFC]">
-                <td className="px-4 py-2.5 text-[#1A202C]">{r.name}</td>
-                <td className="px-4 py-2.5 text-right font-medium">{r.count}</td>
-                <td className="px-4 py-2.5 text-right text-[#4A5568]">{r.qty}</td>
-                <td className="px-4 py-2.5 text-right text-[#4A5568] whitespace-nowrap">
+                <td className="px-3 py-1.5 text-[#1A202C]">{r.name}</td>
+                <td className="px-3 py-1.5 text-right font-medium">{r.count}</td>
+                <td className="px-3 py-1.5 text-right text-[#4A5568]">{r.qty}</td>
+                <td className="px-3 py-1.5 text-right text-[#4A5568] whitespace-nowrap">
                   {formatMoney(r.spend)}
                 </td>
               </tr>
