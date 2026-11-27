@@ -73,11 +73,9 @@ export default function ReportingDashboard() {
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState("");
 
-  // Extra filters
   const [category, setCategory] = useState("all");
   const [toolQuery, setToolQuery] = useState("");
 
-  // Sortable tables
   const [reqSort, setReqSort] = useState<{ key: SortKey; dir: SortDir }>({
     key: "count",
     dir: "desc",
@@ -86,6 +84,13 @@ export default function ReportingDashboard() {
     key: "count",
     dir: "desc",
   });
+  const [cowSort, setCowSort] = useState<{ key: SortKey; dir: SortDir }>({
+    key: "count",
+    dir: "desc",
+  });
+
+  const [expandLead, setExpandLead] = useState(false);
+  const [expandMonth, setExpandMonth] = useState(false);
 
   useEffect(() => {
     setFrom(iso(startOfYear(new Date())));
@@ -123,7 +128,6 @@ export default function ReportingDashboard() {
     load();
   }, [load]);
 
-  // Category from joined tool, or catalog match by reference/name
   const categoryOf = useCallback(
     (r: Request): string => {
       const joined = (r as Request & { tool?: { category?: string | null } }).tool;
@@ -165,7 +169,7 @@ export default function ReportingDashboard() {
     let missingPrice = 0;
     let leadSum = 0;
     let leadCount = 0;
-    const leadBuckets = new Map<number, number>(); // days → count
+    const leadBuckets = new Map<number, number>();
     let leadMax = 0;
 
     for (const r of filtered) {
@@ -185,7 +189,6 @@ export default function ReportingDashboard() {
       }
     }
 
-    // Build 0..max days series (cap display at 30+, group tail)
     const CAP = 30;
     const leadDistribution: { days: string; dayNum: number; count: number }[] = [];
     for (let d = 0; d <= Math.min(leadMax, CAP); d++) {
@@ -219,11 +222,7 @@ export default function ReportingDashboard() {
       leadCount,
       leadDistribution,
       byMonth: Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month)),
-      byRequester: groupBy(
-        filtered,
-        (r) => r.requester?.id ?? "unknown",
-        requesterName
-      ),
+      byRequester: groupBy(filtered, (r) => r.requester?.id ?? "unknown", requesterName),
       byCategory: groupBy(filtered, (r) => categoryOf(r), (r) => categoryOf(r)),
       byCoworker: groupBy(
         filtered,
@@ -240,6 +239,10 @@ export default function ReportingDashboard() {
   const byCategorySorted = useMemo(
     () => sortGroups(stats.byCategory, catSort.key, catSort.dir),
     [stats.byCategory, catSort]
+  );
+  const byCoworkerSorted = useMemo(
+    () => sortGroups(stats.byCoworker, cowSort.key, cowSort.dir),
+    [stats.byCoworker, cowSort]
   );
 
   const preset = (kind: "month" | "90" | "year" | "all") => {
@@ -303,7 +306,9 @@ export default function ReportingDashboard() {
           <h1 className="text-2xl font-semibold text-[#1A202C]">Reporting</h1>
           <p className="text-sm text-[#4A5568] mt-0.5">
             {filtered.length} request{filtered.length !== 1 ? "s" : ""}
-            {filtered.length !== rows.length ? ` (of ${rows.length} in period)` : " in the selected period"}
+            {filtered.length !== rows.length
+              ? ` (of ${rows.length} in period)`
+              : " in the selected period"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -349,7 +354,6 @@ export default function ReportingDashboard() {
         </div>
       </div>
 
-      {/* Extra filters */}
       <div className="bg-white rounded-lg border border-[#E2E8F0] p-4 flex flex-wrap gap-3 items-end">
         <div>
           <label className="block text-xs text-[#718096] mb-1">Category</label>
@@ -415,7 +419,6 @@ export default function ReportingDashboard() {
         />
       </div>
 
-      {/* Time-to-deliver distribution */}
       <Panel title="Time to deliver (days from request → handover)">
         {stats.leadDistribution.every((d) => d.count === 0) ? (
           <div className="p-6 text-sm text-[#4A5568]">
@@ -423,21 +426,38 @@ export default function ReportingDashboard() {
           </div>
         ) : (
           <div className="p-5 space-y-2">
-            {stats.leadDistribution.map((d) => (
-              <div key={d.dayNum} className="flex items-center gap-3 text-sm">
-                <div className="w-24 text-[#4A5568] shrink-0">{d.days}</div>
-                <div className="flex-1 bg-[#F1F5F9] rounded h-5 overflow-hidden">
-                  <div
-                    className="bg-[#FFDA1A] h-full"
-                    style={{ width: `${(d.count / maxLead) * 100}%` }}
-                  />
-                </div>
-                <div className="w-12 text-right font-medium">{d.count}</div>
-              </div>
-            ))}
-            <p className="text-xs text-[#718096] pt-2">
-              Same-day delivery = 0 days. Only Delivered / Closed with a handover date.
-            </p>
+            <div
+              className={
+                expandLead ? "space-y-2" : "space-y-2 max-h-64 overflow-y-auto pr-1"
+              }
+            >
+              {stats.leadDistribution
+                .filter((d) => expandLead || d.count > 0)
+                .map((d) => (
+                  <div key={d.dayNum} className="flex items-center gap-3 text-sm">
+                    <div className="w-24 text-[#4A5568] shrink-0">{d.days}</div>
+                    <div className="flex-1 bg-[#F1F5F9] rounded h-5 overflow-hidden">
+                      <div
+                        className="bg-[#FFDA1A] h-full"
+                        style={{ width: `${(d.count / maxLead) * 100}%` }}
+                      />
+                    </div>
+                    <div className="w-12 text-right font-medium">{d.count}</div>
+                  </div>
+                ))}
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-xs text-[#718096]">
+                Same-day = 0 days. Only Delivered / Closed with handover date.
+              </p>
+              <button
+                type="button"
+                className="text-sm text-[#0058A3] hover:underline"
+                onClick={() => setExpandLead((v) => !v)}
+              >
+                {expandLead ? "Show less" : "Expand"}
+              </button>
+            </div>
           </div>
         )}
       </Panel>
@@ -463,21 +483,38 @@ export default function ReportingDashboard() {
           <div className="p-6 text-sm text-[#4A5568]">No data</div>
         ) : (
           <div className="p-5 space-y-2">
-            {stats.byMonth.map((m) => (
-              <div key={m.month} className="flex items-center gap-3 text-sm">
-                <div className="w-20 text-[#4A5568] shrink-0">
-                  {format(new Date(m.month + "-01"), "MMM yyyy")}
+            <div
+              className={
+                expandMonth ? "space-y-2" : "space-y-2 max-h-64 overflow-y-auto pr-1"
+              }
+            >
+              {stats.byMonth.map((m) => (
+                <div key={m.month} className="flex items-center gap-3 text-sm">
+                  <div className="w-20 text-[#4A5568] shrink-0">
+                    {format(new Date(m.month + "-01"), "MMM yyyy")}
+                  </div>
+                  <div className="flex-1 bg-[#F1F5F9] rounded h-5 overflow-hidden">
+                    <div
+                      className="bg-[#0058A3] h-full"
+                      style={{ width: `${(m.count / maxMonth) * 100}%` }}
+                    />
+                  </div>
+                  <div className="w-10 text-right font-medium">{m.count}</div>
+                  <div className="w-32 text-right text-[#4A5568]">{formatMoney(m.spend)}</div>
                 </div>
-                <div className="flex-1 bg-[#F1F5F9] rounded h-5 overflow-hidden">
-                  <div
-                    className="bg-[#0058A3] h-full"
-                    style={{ width: `${(m.count / maxMonth) * 100}%` }}
-                  />
-                </div>
-                <div className="w-10 text-right font-medium">{m.count}</div>
-                <div className="w-32 text-right text-[#4A5568]">{formatMoney(m.spend)}</div>
+              ))}
+            </div>
+            {stats.byMonth.length > 6 && (
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  className="text-sm text-[#0058A3] hover:underline"
+                  onClick={() => setExpandMonth((v) => !v)}
+                >
+                  {expandMonth ? "Show less" : "Expand"}
+                </button>
               </div>
-            ))}
+            )}
           </div>
         )}
       </Panel>
@@ -499,10 +536,9 @@ export default function ReportingDashboard() {
 
       <SortableGroupTable
         title="By coworker"
-        rows={sortGroups(stats.byCoworker, "count", "desc")}
-        sort={{ key: "count", dir: "desc" }}
-        onSort={() => {}}
-        disableSort
+        rows={byCoworkerSorted}
+        sort={cowSort}
+        onSort={(key) => toggleSort(cowSort, setCowSort, key)}
       />
     </div>
   );
@@ -548,25 +584,23 @@ function SortableGroupTable({
   rows,
   sort,
   onSort,
-  disableSort,
 }: {
   title: string;
   rows: Group[];
   sort: { key: SortKey; dir: SortDir };
   onSort: (key: SortKey) => void;
-  disableSort?: boolean;
 }) {
   const head = (key: SortKey, label: string, align: "left" | "right") => {
     const active = sort.key === key;
     return (
       <th
-        className={`${align === "left" ? "text-left" : "text-right"} px-4 py-2.5 font-medium text-[#4A5568] ${
-          disableSort ? "" : "cursor-pointer select-none hover:text-[#0058A3]"
-        }`}
-        onClick={() => !disableSort && onSort(key)}
+        className={`${
+          align === "left" ? "text-left" : "text-right"
+        } px-4 py-2.5 font-medium text-[#4A5568] cursor-pointer select-none hover:text-[#0058A3]`}
+        onClick={() => onSort(key)}
       >
         {label}
-        {!disableSort && active ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
+        {active ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
       </th>
     );
   };
